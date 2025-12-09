@@ -140,7 +140,7 @@ const Icon = ({ name, size = 20, className = "" }: any) => {
     plus: <><line x1="12" x2="12" y1="5" y2="19" /><line x1="5" x2="19" y1="12" y2="12" /></>,
     trash: <><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>,
     search: <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
-    settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></>,
     map: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></>,
     calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>,
     clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
@@ -294,10 +294,6 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
           "no-deposit": `您好，您的預約已確認（無需訂金）。\n時間：{{date}} {{time}}\n地點：{{location}}\n服務：{{service}}\n期待您的光臨。`
       };
       
-      let tplKey = type;
-      // Merge confirm and verify logic for message if needed, but here we keep distinct templates.
-      // If type is 'confirm' (merged button), we use confirm template.
-      
       const userTpl = templates.find(t => t.title.includes(type === 'confirm' ? '確認' : type === 'verify' ? '訂金' : type === 'no-deposit' ? '無需訂金' : '取消'))?.content;
       const tpl = userTpl || defaultTemplates[type] || defaultTemplates['confirm'];
 
@@ -326,7 +322,6 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
               updates.status = 'cancelled';
           }
           if(actionType === 'confirm') {
-              // Merge: Confirm button now sets confirmed AND verified (implied payment checked)
               updates.status = 'confirmed';
               updates.paymentStatus = 'verified';
           }
@@ -338,7 +333,6 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
           }
           
           await firebaseService.updateBookingStatus(actionBooking.id, updates);
-          // Don't auto copy here to avoid async issues, rely on the manual copy button in modal or pre-action copy.
           setActionBooking(null);
           setActionType(null);
       } catch (e) {
@@ -440,8 +434,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
       const upcoming = targetBookings.filter(b => b.status === 'confirmed' && new Date(b.date) >= new Date()).sort((a,b) => a.date.localeCompare(b.date));
       const history = targetBookings.filter(b => b.status === 'confirmed' && new Date(b.date) < new Date());
       
-      // If trash view, just show all cancelled
-      const cancelledList = targetBookings; // In trash mode, all are cancelled.
+      const cancelledList = targetBookings; 
 
       const Section = ({ title, list }: { title: string, list: BookingRecord[] }) => (
           list.length > 0 ? (
@@ -779,7 +772,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
         <Modal title="快速新增預約" isOpen={isManualAddOpen} onClose={() => setIsManualAddOpen(false)}><div className="space-y-4"><div><label className="text-xs font-bold text-gray-500 block mb-1">店點</label><div className="flex gap-2">{LOCATIONS.map(l => (<button key={l.id} onClick={() => setManualBooking({...manualBooking, locationId: l.id})} className={`flex-1 py-2 text-sm rounded border ${manualBooking.locationId === l.id ? 'bg-[#8d6e63] text-white border-[#8d6e63]' : 'bg-white border-gray-200'}`}>{l.name}</button>))}</div></div><div className="flex gap-2"><div className="flex-1"><label className="text-xs font-bold text-gray-500 block mb-1">日期</label><input type="date" className="w-full p-2 border rounded" value={manualBooking.date} onChange={e => setManualBooking({...manualBooking, date: e.target.value})} /></div><div className="flex-1"><label className="text-xs font-bold text-gray-500 block mb-1">時間</label><input type="time" className="w-full p-2 border rounded" value={manualBooking.time} onChange={e => setManualBooking({...manualBooking, time: e.target.value})} /></div></div><div><label className="text-xs font-bold text-gray-500 block mb-1">顧客姓名</label><input className="w-full p-2 border rounded" value={manualBooking.name} onChange={e => setManualBooking({...manualBooking, name: e.target.value})} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">顧客電話</label><input className="w-full p-2 border rounded" value={manualBooking.phone} onChange={e => setManualBooking({...manualBooking, phone: e.target.value})} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">服務項目</label><select className="w-full p-2 border rounded bg-white" value={manualBooking.serviceId} onChange={e => setManualBooking({...manualBooking, serviceId: e.target.value})}><option value="">請選擇...</option>{services.sort((a,b)=>(a.order||0)-(b.order||0)).map(s => (<option key={s.id} value={s.id}>{s.name} (${s.price})</option>))}</select></div><Button onClick={handleManualAdd} className="w-full mt-2">新增預約</Button></div></Modal>
     </div>
   );
-};
+}
 
 // --- Sub-components for Logic Separation ---
 
@@ -926,6 +919,7 @@ const StatusPage = ({ onBack }: { onBack: () => void }) => {
         setLoading(true);
         try {
             const data = await firebaseService.searchBookings(phone);
+            // Filter out cancelled and past bookings
             const now = new Date();
             const valid = data.filter(b => b.status !== 'cancelled' && new Date(b.date) >= new Date(now.setHours(0,0,0,0)));
             valid.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
