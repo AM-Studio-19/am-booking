@@ -981,3 +981,4 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 }
 
 export default App;
+}
