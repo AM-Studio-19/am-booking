@@ -12,9 +12,9 @@ export const APP_ID = 'booking-system-web';
 export const ADMIN_PIN = '1234';
 
 export const BANK_INFO = {
-  code: '822',
-  bankName: '中國信託',
-  account: '1234-5678-9012',
+  code: '812',
+  bankName: '台新銀行',
+  account: '2888101199682',
   amountPerPerson: 1000
 };
 
