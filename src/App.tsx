@@ -861,6 +861,15 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
         {/* Batch Import & Manual Add Modals - Same as before */}
         <Modal title="批量匯入預約" isOpen={isBatchOpen} onClose={() => setIsBatchOpen(false)}><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded text-xs text-yellow-800">格式: <strong>YYYY-MM-DD, HH:MM, 姓名, 電話, 服務名稱</strong><br/>範例: 2024-05-20, 13:00, 王大明, 0912345678, 頂級霧眉</div><textarea className="w-full h-40 p-3 bg-gray-50 border rounded-xl text-sm whitespace-pre" placeholder="請貼上 CSV 格式內容..." value={batchText} onChange={(e) => setBatchText(e.target.value)} /><Button onClick={handleBatchImport} className="w-full">開始匯入</Button></div></Modal>
         <Modal title="快速新增預約" isOpen={isManualAddOpen} onClose={() => setIsManualAddOpen(false)}><div className="space-y-4"><div><label className="text-xs font-bold text-gray-500 block mb-1">店點</label><div className="flex gap-2">{LOCATIONS.map(l => (<button key={l.id} onClick={() => setManualBooking({...manualBooking, locationId: l.id})} className={`flex-1 py-2 text-sm rounded border ${manualBooking.locationId === l.id ? 'bg-[#8d6e63] text-white border-[#8d6e63]' : 'bg-white border-gray-200'}`}>{l.name}</button>))}</div></div><div className="flex gap-2"><div className="flex-1"><label className="text-xs font-bold text-gray-500 block mb-1">日期</label><input type="date" className="w-full p-2 border rounded" value={manualBooking.date} onChange={e => setManualBooking({...manualBooking, date: e.target.value})} /></div><div className="flex-1"><label className="text-xs font-bold text-gray-500 block mb-1">時間</label><input type="time" className="w-full p-2 border rounded" value={manualBooking.time} onChange={e => setManualBooking({...manualBooking, time: e.target.value})} /></div></div><div><label className="text-xs font-bold text-gray-500 block mb-1">顧客姓名</label><input className="w-full p-2 border rounded" value={manualBooking.name} onChange={e => setManualBooking({...manualBooking, name: e.target.value})} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">顧客電話</label><input className="w-full p-2 border rounded" value={manualBooking.phone} onChange={e => setManualBooking({...manualBooking, phone: e.target.value})} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">服務項目</label><select className="w-full p-2 border rounded bg-white" value={manualBooking.serviceId} onChange={e => setManualBooking({...manualBooking, serviceId: e.target.value})}><option value="">請選擇...</option>{services.sort((a,b)=>(a.order||0)-(b.order||0)).map(s => (<option key={s.id} value={s.id}>{s.name} (${s.price})</option>))}</select></div><Button onClick={handleManualAdd} className="w-full mt-2">新增預約</Button></div></Modal>
+        
+        {/* Touchup Search Modal */}
+        <Modal title="補色價格查詢" isOpen={!!touchupQuery && (page === 'touchup')} onClose={() => { setPage('home'); setTouchupQuery(''); }}>
+            {/* The actual modal content will be populated dynamically if connected to API, currently simulated by alert for simplicity in this version, or add TouchupResultCard here if state allows */}
+            <div className="text-center p-4">
+                <p>請使用首頁的查詢功能</p>
+                <Button onClick={() => setPage('home')}>返回</Button>
+            </div>
+        </Modal>
     </div>
   );
 }
@@ -1063,7 +1072,7 @@ export default function App() {
   const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [settings, setSettings] = useState<AppSettings>({});
-  const [bookingsOfDay, setBookingsOfDay] = useState<BookingRecord[]>([]); 
+  const [bookingsOfDay, setBookingsOfDay] = useState<BookingRecord[]>([]); // Changed to store full objects
   
   const [guests, setGuests] = useState<Guest[]>([{ id: 1, name:'', phone:'', services: [], discount: null }]);
   const [isMulti, setIsMulti] = useState(false);
@@ -1148,11 +1157,11 @@ export default function App() {
         let autoDiscount = 0;
 
         if (hasBrowFirst && hasLipFirst) {
-            autoDiscount = 400; 
+            autoDiscount = 400; // Combo Rule
         } else if (hasAnyFirst && hasAnyTouchup) {
-            autoDiscount = 200; 
+            autoDiscount = 200; // Return Customer Rule
         } else if (isMulti && hasAnyFirst) {
-            autoDiscount = 200; 
+            autoDiscount = 200; // Multi-guest Rule
         }
 
         guestTotal -= (guestDiscount + autoDiscount);
@@ -1262,10 +1271,10 @@ export default function App() {
             autoDiscount = 400; 
             discountReason += ' (組合優惠)';
         } else if (hasAnyFirst && hasAnyTouchup) {
-            autoDiscount = 200; 
+            autoDiscount = 200;
             discountReason += ' (舊客優惠)';
         } else if (isMulti && hasAnyFirst) {
-            autoDiscount = 200; 
+            autoDiscount = 200;
             discountReason += ' (多人同行)';
         }
 
@@ -1328,28 +1337,8 @@ export default function App() {
   };
 
   const handleTouchupSearch = () => {
-      // 這裡您可以填入實際的補色查詢邏輯，目前是模擬
       if(!touchupQuery) return alert('請輸入姓名或手機');
-      
-      // 模擬查詢結果 (開發階段)
-      // 如果您有真實 API，請用 fetch() 替換這裡
-      const mockResult = {
-        name: touchupQuery,
-        phone: "0912***345",
-        lastDate: "2023-10-15",
-        service: "頂級霧眉",
-        specialReminder: "請避開生理期",
-        eyebrowDiscountDate: "2024-01-15",
-        currentPriceInfo: { price: 2000, dateRange: "【優惠期】1/15 前" },
-        touchUpRanges: [
-          { dateRange: "1/15 前", price: 2000 },
-          { dateRange: "1/16 後", price: 3000 }
-        ]
-      };
-      
-      // 這裡需要開啟一個 Modal 來顯示查詢結果 (為了簡化，目前先用 alert 示意位置)
-      // 在您的下一版需求中，我們會把這裡變成漂亮的卡片彈窗
-      alert(`查詢結果：\n姓名: ${mockResult.name}\n上次項目: ${mockResult.service}\n目前價格: $${mockResult.currentPriceInfo.price}`);
+      alert('🔍 查詢功能開發中：請稍後再來');
   };
 
   if (page === 'admin-login') return <AdminLogin onLogin={() => setPage('admin')} onBack={() => setPage('home')} />;
@@ -1465,6 +1454,7 @@ export default function App() {
                                 <Icon name="plus" size={18} /> {g.services.length > 0 ? '新增服務' : '選擇服務'}
                             </Button>
 
+                            {/* Discount Selection - Hide if system discount applied to simplify */}
                             {!discountText && !g.services.some(s=>s.type==='補色') && g.services.length > 0 && (
                                 <div className="mt-4 pt-4 border-t border-gray-100">
                                     <label className="flex items-center gap-2 text-xs font-bold text-[#8d6e63] mb-2"><Icon name="tag" size={14}/> 優惠身份</label>
@@ -1714,6 +1704,19 @@ export default function App() {
                     setModalOpen(false);
                 }} 
             />
+        </Modal>
+        
+        {/* Touchup Search Modal - New Component Hookup */}
+        <Modal title="補色價格查詢" isOpen={!!touchupQuery && (page === 'home' || page === 'touchup')} onClose={() => { setTouchupQuery(''); }}>
+             <div className="text-center p-4">
+                 <p className="text-gray-500 mb-4">查詢功能整合中，請稍後...</p>
+                 {/* In a real implementation, you would fetch data from GAS_API_URL here using touchupQuery */}
+                 {/* For now, simulate a result or error */}
+                 <div className="bg-yellow-50 p-3 rounded text-sm text-yellow-800 mb-4">
+                     您輸入的查詢：{touchupQuery}
+                 </div>
+                 <Button onClick={() => setTouchupQuery('')}>關閉</Button>
+             </div>
         </Modal>
     </div>
   );
