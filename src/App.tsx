@@ -20,9 +20,9 @@ const LIFF_ID = '2008567948-KGMPJPGe';
 const APP_ID = 'booking-system-web';
 const ADMIN_PIN = '1234';
 const BANK_INFO = {
-  code: '812',
-  bankName: '台新銀行',
-  account: '28881011995682',
+  code: '822',
+  bankName: '中國信託',
+  account: '1234-5678-9012',
   amountPerPerson: 1000
 };
 const LOCATIONS = [
@@ -1484,7 +1484,7 @@ export default function App() {
                                     value={g.phone} 
                                     onChange={e => handleGuestUpdate(i, 'phone', e.target.value)} />
                             </div>
-                            <div className="px-1 text-[12px] text-gray-400">
+                            <div className="px-1 text-[10px] text-gray-400">
                                 * 預約查詢用，請確認是否填寫正確<br/>
                                 * 若幫家人預約，可使用同一組電話號碼方便查詢
                             </div>
@@ -1580,12 +1580,12 @@ export default function App() {
                          <div className="hidden"></div> // Spacer
                      )}
                      <Button variant="secondary" className="flex-1 h-full shadow-xl" onClick={() => {
-                         if (step === 1 && guests.some(g => g.services.length === 0)) return alert('請為所有人選擇服務');
+                         if (step === 1 && guests.some(g => g.services.length === 0)) return alert('請為所有賓客選擇服務');
                          if (step === 2) {
                              const missing = guests.some((_, i) => !guestTimes[i]);
-                             if (missing) return alert('請為所有人選擇預約時間');
+                             if (missing) return alert('請為所有賓客選擇預約時間');
                          }
-                         if (step === 3 && guests.some(g => !g.name || !g.phone)) return alert('請填寫所有人資料');
+                         if (step === 3 && guests.some(g => !g.name || !g.phone)) return alert('請填寫所有賓客資料');
                          if (step === 3 && !agreed) return alert('請同意預約須知');
                          if (step === 3) submitBooking();
                          else setStep(s => s + 1);
