@@ -1,16 +1,238 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, 
+  query, where, orderBy, limit, Timestamp, writeBatch, onSnapshot, setDoc, getDocs 
+} from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
 import liff from '@line/liff';
-import { Icon, Card, Button, Modal, Spinner } from './components/Shared';
-import { firebaseService } from './services/firebase';
-import { 
-  LOCATIONS, MAIN_CATS, SUB_CATS, TOUCHUP_SESSIONS, 
-  DEFAULT_SLOTS, BANK_INFO, ADMIN_PIN, MOCK_SERVICES, LIFF_ID
-} from './constants';
-import { 
-  Service, Guest, Location, BookingRecord, AppSettings, Discount, Template
-} from './types';
 
-// --- Helper Functions ---
+// --- 1. CONSTANTS & CONFIG ---
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCzCXFgd7VrWHyHrM3GILQ2JHzQaa7yoIw",
+  authDomain: "amstudio-booking.firebaseapp.com",
+  projectId: "amstudio-booking",
+  storageBucket: "amstudio-booking.firebasestorage.app",
+  messagingSenderId: "197698776484",
+  appId: "1:197698776484:web:818beeea66d470bfc36531"
+};
+const LIFF_ID = '2008567948-KGMPJPGe';
+const APP_ID = 'booking-system-web';
+const ADMIN_PIN = '1234';
+const BANK_INFO = {
+  code: '822',
+  bankName: '中國信託',
+  account: '1234-5678-9012',
+  amountPerPerson: 1000
+};
+// 您的 GAS API 網址
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx6grwl5DidK6DScAaZLM8udp-Pjn_FrB33bv6ES0JkwAiiIx-xxJHicxANVGH7caSpEg/exec";
+
+const LOCATIONS = [
+  { id: 'tainan', name: '台南工作室' },
+  { id: 'kaohsiung', name: '高雄工作室' }
+];
+const MAIN_CATS = ["霧眉", "霧唇"];
+const SUB_CATS = ["首次", "補色"];
+const TOUCHUP_SESSIONS = ["第一次回補", "第二次以上"];
+const DEFAULT_SLOTS = ["11:00", "13:00", "15:00", "17:00", "18:30", "微調時段申請"];
+const MOCK_SERVICES = [
+  { id: '1', name: '頂級霧眉 (首次)', price: 6000, category: '霧眉', type: '首次', order: 1, duration: 120 },
+  { id: '2', name: '水嫩霧唇 (首次)', price: 8000, category: '霧唇', type: '首次', order: 2, duration: 150 },
+  { id: '3', name: '霧眉補色 (第一次)', price: 2000, category: '霧眉', type: '補色', session: '第一次回補', timeRange: '3個月內', duration: 90 },
+  { id: '4', name: '霧唇補色 (第一次)', price: 3000, category: '霧唇', type: '補色', session: '第一次回補', timeRange: '3個月內', duration: 120 },
+];
+
+// --- 2. TYPES ---
+export interface Service {
+  id: string; name: string; price: number; category: string; type: string;
+  session?: string; timeRange?: string; isDarkLip?: boolean; order?: number; active?: boolean; duration?: number;
+}
+export interface Template {
+  id: string; title: string; content: string;
+}
+export interface Discount {
+  id: string; name: string; amount: number; active?: boolean;
+}
+export interface Location {
+  id: string; name: string;
+}
+export interface Guest {
+  id: number; name: string; phone: string; services: Service[]; discount: Discount | null;
+}
+export interface BookingRecord {
+  id: string; locationId: string; locationName: string; serviceName: string; serviceDuration: number;
+  date: string; time: string; customerName: string; customerPhone: string; status: 'pending' | 'confirmed' | 'cancelled';
+  paymentStatus: 'unpaid' | 'reported' | 'verified'; totalPrice: number; deposit: number; guestIndex: number; notes?: string;
+  paymentInfo?: { last5: string; at: string; }; discountIdentity?: string; groupId?: string; userId?: string;
+}
+export interface AppSettings {
+  allowedDates?: string[]; specialRules?: Record<string, string[]>; timeSlots?: string[];
+}
+
+// 補色查詢資料結構
+export interface TouchupRecord {
+  name: string;
+  phone: string;
+  lastDate: string;
+  service: string;
+  specialReminder?: string;
+  eyebrowDiscountDate?: string;
+  currentPriceInfo?: {
+    price: number;
+    dateRange: string;
+  };
+  touchUpRanges?: {
+    dateRange: string;
+    price: number;
+  }[];
+}
+
+// --- 3. FIREBASE SERVICE ---
+const app = initializeApp(FIREBASE_CONFIG);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const getPublicDataRef = () => doc(db, 'artifacts', APP_ID, 'public', 'data');
+
+const firebaseService = {
+  auth, db,
+  signIn: () => signInAnonymously(auth),
+  onUserChange: (callback: (user: User | null) => void) => onAuthStateChanged(auth, callback),
+  getServices: (callback: (data: any[]) => void) => onSnapshot(collection(getPublicDataRef(), 'services'), (snap) => callback(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+  getDiscounts: (callback: (data: any[]) => void) => onSnapshot(collection(getPublicDataRef(), 'discounts'), (snap) => callback(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+  getTemplates: (callback: (data: any[]) => void) => onSnapshot(collection(getPublicDataRef(), 'templates'), (snap) => callback(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+  getSettings: (callback: (data: any) => void) => onSnapshot(collection(getPublicDataRef(), 'settings'), (snap) => {
+      const settings: any = {};
+      snap.forEach(d => { settings[d.id] = d.data(); });
+      callback(settings);
+  }),
+  getBookingsByDate: (locationId: string, dateStr: string, callback: (bookings: any[]) => void) => {
+    const q = query(collection(getPublicDataRef(), 'bookings'), where('locationId', '==', locationId), where('date', '==', dateStr));
+    return onSnapshot(q, (snap) => {
+      const bookings = snap.docs.map(d => d.data()).filter((b: any) => b.status !== 'cancelled');
+      callback(bookings);
+    });
+  },
+  getAllBookings: (callback: (bookings: any[]) => void) => {
+     const q = query(collection(getPublicDataRef(), 'bookings'), orderBy('date', 'desc'), limit(300));
+     return onSnapshot(q, (snap) => callback(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+  },
+  searchBookings: async (phone: string) => {
+    const q = query(collection(getPublicDataRef(), 'bookings'), where('customerPhone', '==', phone));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+  createBookings: async (bookingsData: any[]) => {
+    const batch = writeBatch(db);
+    bookingsData.forEach(data => {
+      const ref = doc(collection(getPublicDataRef(), 'bookings'));
+      batch.set(ref, { ...data, createdAt: Timestamp.now() });
+    });
+    await batch.commit();
+  },
+  reportPayment: async (bookingId: string, last5: string) => {
+    const ref = doc(collection(getPublicDataRef(), 'bookings'), bookingId);
+    await updateDoc(ref, { paymentStatus: 'reported', paymentInfo: { last5, at: new Date().toISOString() } });
+  },
+  updateBookingStatus: async (id: string, updates: any) => {
+    await updateDoc(doc(collection(getPublicDataRef(), 'bookings'), id), updates);
+  },
+  addItem: async (collectionName: string, data: any) => {
+    await addDoc(collection(getPublicDataRef(), collectionName), data);
+  },
+  updateItem: async (collectionName: string, id: string, data: any) => {
+    await updateDoc(doc(collection(getPublicDataRef(), collectionName), id), data);
+  },
+  deleteItem: async (collectionName: string, id: string) => {
+    await deleteDoc(doc(collection(getPublicDataRef(), collectionName), id));
+  },
+  updateSettings: async (docId: string, data: any) => {
+    await setDoc(doc(collection(getPublicDataRef(), 'settings'), docId), data, { merge: true });
+  }
+};
+
+// --- 4. SHARED COMPONENTS ---
+const Icon = ({ name, size = 20, className = "" }: any) => {
+  const paths: any = {
+    check: <polyline points="20 6 9 17 4 12" />,
+    chevronRight: <path d="m9 18 6-6-6-6" />,
+    chevronLeft: <path d="m15 18-6-6 6-6" />,
+    close: <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>,
+    plus: <><line x1="12" x2="12" y1="5" y2="19" /><line x1="5" x2="19" y1="12" y2="12" /></>,
+    trash: <><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>,
+    search: <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></>,
+    map: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></>,
+    calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>,
+    clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
+    user: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+    tag: <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></>,
+    back: <path d="M19 12H5m7 7l-7-7 7-7" />,
+    eye: <><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>,
+    smile: <><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></>,
+    copy: <><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>,
+    noDeposit: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></>,
+    refresh: <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>,
+    down: <path d="m6 9 6 6 6-6"/>,
+    up: <path d="m18 15-6-6-6 6"/>
+  };
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {paths[name] || <circle cx="12" cy="12" r="10" />}
+    </svg>
+  );
+};
+
+const Card: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
+  <div className={`bg-white rounded-2xl p-5 shadow-sm border border-[#EAE0D5] ${className}`}>
+    {children}
+  </div>
+);
+
+export interface ButtonProps {
+  onClick?: () => void;
+  children?: React.ReactNode;
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
+  className?: string;
+  disabled?: boolean;
+}
+
+export const Button: React.FC<ButtonProps> = ({ onClick, children, variant = "primary", className = "", disabled = false }) => {
+  const baseStyle = "flex items-center justify-center gap-2 rounded-xl font-bold transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
+  const variants = {
+    primary: "bg-[#8D6E63] text-white shadow-lg hover:bg-[#795548] py-3",
+    secondary: "bg-[#2c2c2c] text-white shadow-lg py-3",
+    outline: "border-2 border-dashed border-[#8d6e63] text-[#8d6e63] bg-transparent hover:bg-[#fffaf9] py-3",
+    ghost: "bg-transparent text-gray-400 hover:text-[#8d6e63] p-2",
+    danger: "bg-red-50 text-red-400 hover:bg-red-100 p-2",
+  };
+  return (
+    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+      {children}
+    </button>
+  );
+};
+
+export const Modal: React.FC<{ title: string; isOpen: boolean; onClose: () => void; children?: React.ReactNode }> = ({ title, isOpen, onClose, children }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center backdrop-blur-[2px] transition-opacity animate-fadeIn" onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl p-6 pb-10 shadow-2xl max-h-[85vh] overflow-y-auto transform transition-transform" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-[#4e342e]">{title}</h3>
+          <button onClick={onClose} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200"><Icon name="close" size={16} /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+export const Spinner = () => (
+  <div className="w-6 h-6 border-4 border-[#f3f3f3] border-t-[#C4A48C] rounded-full animate-spin"></div>
+);
+
+// --- 5. MAIN LOGIC ---
 const copyToClipboard = (text: string) => {
     if (!navigator.clipboard) {
         const textArea = document.createElement("textarea");
@@ -37,7 +259,88 @@ const calculateGuestDuration = (guestServices: Service[]) => {
     return Math.max(totalMinutes - reduction, 0);
 };
 
-// --- Admin Components ---
+// --- Touchup Result Card Component ---
+const TouchupResultCard = ({ r }: { r: TouchupRecord }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    // Helpers
+    const maskPhone = (p: string) => {
+        if (!p) return '';
+        const s = String(p).replace(/'/g, '').trim();
+        return s.length < 8 ? s : s.substring(0, 4) + '***' + s.substring(s.length - 3);
+    };
+    
+    const checkIsExpired = (d?: string) => {
+        if (!d) return false;
+        return new Date() > new Date(d);
+    };
+
+    // Current price logic
+    const info = r.currentPriceInfo;
+    const useOrange = r.eyebrowDiscountDate && !checkIsExpired(r.eyebrowDiscountDate);
+    const priceDisplay = info ? (info.price === 0 ? '免費' : (info.price ? `NT$ ${info.price}` : '洽詢')) : '';
+    const bgClass = info?.price === 0 ? 'bg-green-600' : (useOrange ? 'bg-orange-500' : 'bg-[#D6BFA8]'); // D6BFA8 is original rose/gold
+    
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4 animate-fadeIn">
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <h3 className="text-xl font-bold text-[#5d4037]">{r.name}</h3>
+                    <span className="text-sm text-gray-400">{maskPhone(r.phone)}</span>
+                </div>
+            </div>
+            
+            <div className="flex gap-2 mb-4">
+                <div className="flex-1 bg-[#F9F8F6] p-3 rounded-xl border border-gray-100 text-center">
+                    <span className="block text-xs text-gray-400 mb-1">上次日期</span>
+                    <span className="block font-bold text-[#5d4037]">{r.lastDate || '-'}</span>
+                </div>
+                <div className="flex-1 bg-[#F9F8F6] p-3 rounded-xl border border-gray-100 text-center">
+                    <span className="block text-xs text-gray-400 mb-1">上次項目</span>
+                    <span className="block font-bold text-[#8d6e63]">{r.service}</span>
+                </div>
+            </div>
+
+            {r.specialReminder && (
+                <div className="bg-yellow-50 text-yellow-800 p-3 rounded-xl text-xs mb-4 font-medium flex gap-2">
+                    <span>💡</span><span>{r.specialReminder}</span>
+                </div>
+            )}
+
+            {info && (
+                <div className={`border rounded-xl p-3 flex justify-between items-center mb-4 ${info.price === 0 ? 'border-green-200 bg-green-50' : 'border-[#EAE0D5] bg-[#FFFBF9]'}`}>
+                    <div>
+                        <div className="text-xs font-bold text-gray-400 mb-1">目前補色價格</div>
+                        <div className="text-sm font-bold text-[#5d4037]">{(info.dateRange || '').replace(/【.*?】/g, '')}</div>
+                    </div>
+                    <span className={`px-3 py-1 text-white text-sm font-bold rounded-lg shadow-sm ${bgClass}`}>
+                        {priceDisplay}
+                    </span>
+                </div>
+            )}
+
+            <div>
+                <button 
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="w-full py-2 bg-gray-50 text-gray-500 rounded-lg text-xs flex items-center justify-center gap-1 hover:bg-gray-100 transition-colors">
+                    {isExpanded ? '收起價目表' : '查看完整價目表'}
+                    <Icon name={isExpanded ? 'up' : 'down'} size={12} />
+                </button>
+                
+                {isExpanded && (
+                    <div className="mt-2 bg-gray-50 rounded-xl p-3 space-y-2 animate-fadeIn">
+                        {r.touchUpRanges?.map((t, idx) => (
+                            <div key={idx} className="flex justify-between text-sm border-b border-gray-200 last:border-0 pb-2 last:pb-0">
+                                <span className="text-gray-600">{t.dateRange}</span>
+                                <span className="font-bold text-[#5d4037]">{t.price === 0 ? '免費' : `$${t.price}`}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const AdminLogin = ({ onLogin, onBack }: { onLogin: () => void, onBack: () => void }) => {
   const [pin, setPin] = useState('');
@@ -47,13 +350,7 @@ const AdminLogin = ({ onLogin, onBack }: { onLogin: () => void, onBack: () => vo
         <h2 className="text-xl font-bold mb-6 text-[#4e342e]">後台登入</h2>
         <input type="password" placeholder="PIN碼" className="w-full p-4 bg-[#fdfbf7] rounded-xl mb-6 text-center text-xl tracking-widest border border-[#d7ccc8] focus:border-[#8d6e63] outline-none" 
           value={pin} onChange={e => setPin(e.target.value)} />
-        <div className="flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onBack}>取消</Button>
-          <Button className="flex-1" onClick={() => {
-              if (pin === ADMIN_PIN) onLogin();
-              else alert('密碼錯誤');
-          }}>登入</Button>
-        </div>
+        <div className="flex gap-3"><Button variant="ghost" className="flex-1" onClick={onBack}>取消</Button><Button className="flex-1" onClick={() => { if (pin === ADMIN_PIN) onLogin(); else alert('密碼錯誤'); }}>登入</Button></div>
       </div>
     </div>
   );
@@ -62,7 +359,7 @@ const AdminLogin = ({ onLogin, onBack }: { onLogin: () => void, onBack: () => vo
 const AdminPanel = ({ onBack }: { onBack: () => void }) => {
   const [tab, setTab] = useState<'bookings' | 'services' | 'settings' | 'others'>('bookings');
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
-  const [showTrash, setShowTrash] = useState(false);
+  const [showTrash, setShowTrash] = useState(false); 
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -526,6 +823,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 
         {/* Edit Modal */}
         <Modal title={editItem?.id ? '編輯' : '新增'} isOpen={isEditOpen} onClose={() => setIsEditOpen(false)}>
+            {/* ... Content same as before ... */}
             <div className="space-y-4">
                 {editType === 'service' && (<><input className="w-full p-2 border rounded" placeholder="名稱" value={editItem?.name || ''} onChange={e => setEditItem({...editItem, name: e.target.value})} /><div className="flex gap-2"><input className="w-1/2 p-2 border rounded" type="number" placeholder="價格" value={editItem?.price || ''} onChange={e => setEditItem({...editItem, price: Number(e.target.value)})} /><input className="w-1/2 p-2 border rounded" type="number" placeholder="時長(分)" value={editItem?.duration || 120} onChange={e => setEditItem({...editItem, duration: Number(e.target.value)})} /></div><select className="w-full p-2 border rounded" value={editItem?.category || ''} onChange={e => setEditItem({...editItem, category: e.target.value})}>
                     <option value="">選擇類別</option>{MAIN_CATS.map(c => <option key={c} value={c}>{c}</option>)}</select><select className="w-full p-2 border rounded" value={editItem?.type || ''} onChange={e => setEditItem({...editItem, type: e.target.value})}><option value="">選擇類型</option>{SUB_CATS.map(c => <option key={c} value={c}>{c}</option>)}</select>{editItem?.type === '補色' && (<><select className="w-full p-2 border rounded" value={editItem?.session || ''} onChange={e => setEditItem({...editItem, session: e.target.value})}><option value="">選擇次數</option>{TOUCHUP_SESSIONS.map(c => <option key={c} value={c}>{c}</option>)}</select><input className="w-full p-2 border rounded" placeholder="時段 (3個月內)" value={editItem?.timeRange || ''} onChange={e => setEditItem({...editItem, timeRange: e.target.value})} /></>)}</>)}
@@ -560,72 +858,9 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
              </div>
         </Modal>
 
-        {/* Batch Import Modal */}
-        <Modal title="批量匯入預約" isOpen={isBatchOpen} onClose={() => setIsBatchOpen(false)}>
-             <div className="space-y-4">
-                 <div className="bg-yellow-50 p-3 rounded text-xs text-yellow-800">
-                     格式: <strong>YYYY-MM-DD, HH:MM, 姓名, 電話, 服務名稱</strong><br/>
-                     範例: 2024-05-20, 13:00, 王大明, 0912345678, 頂級霧眉
-                 </div>
-                 <textarea 
-                    className="w-full h-40 p-3 bg-gray-50 border rounded-xl text-sm whitespace-pre"
-                    placeholder="請貼上 CSV 格式內容..."
-                    value={batchText}
-                    onChange={(e) => setBatchText(e.target.value)}
-                 />
-                 <Button onClick={handleBatchImport} className="w-full">
-                     開始匯入
-                 </Button>
-             </div>
-        </Modal>
-
-        {/* Manual Add Booking Modal */}
-        <Modal title="快速新增預約" isOpen={isManualAddOpen} onClose={() => setIsManualAddOpen(false)}>
-             <div className="space-y-4">
-                 <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">店點</label>
-                     <div className="flex gap-2">
-                         {LOCATIONS.map(l => (
-                             <button key={l.id} 
-                                 onClick={() => setManualBooking({...manualBooking, locationId: l.id})}
-                                 className={`flex-1 py-2 text-sm rounded border ${manualBooking.locationId === l.id ? 'bg-[#8d6e63] text-white border-[#8d6e63]' : 'bg-white border-gray-200'}`}>
-                                 {l.name}
-                             </button>
-                         ))}
-                     </div>
-                 </div>
-                 <div className="flex gap-2">
-                     <div className="flex-1">
-                         <label className="text-xs font-bold text-gray-500 block mb-1">日期</label>
-                         <input type="date" className="w-full p-2 border rounded" value={manualBooking.date} onChange={e => setManualBooking({...manualBooking, date: e.target.value})} />
-                     </div>
-                     <div className="flex-1">
-                         <label className="text-xs font-bold text-gray-500 block mb-1">時間</label>
-                         <input type="time" className="w-full p-2 border rounded" value={manualBooking.time} onChange={e => setManualBooking({...manualBooking, time: e.target.value})} />
-                     </div>
-                 </div>
-                 <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">顧客姓名</label>
-                     <input className="w-full p-2 border rounded" value={manualBooking.name} onChange={e => setManualBooking({...manualBooking, name: e.target.value})} />
-                 </div>
-                 <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">顧客電話</label>
-                     <input className="w-full p-2 border rounded" value={manualBooking.phone} onChange={e => setManualBooking({...manualBooking, phone: e.target.value})} />
-                 </div>
-                 <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">服務項目</label>
-                     <select className="w-full p-2 border rounded bg-white" value={manualBooking.serviceId} onChange={e => setManualBooking({...manualBooking, serviceId: e.target.value})}>
-                         <option value="">請選擇...</option>
-                         {services.sort((a,b)=>(a.order||0)-(b.order||0)).map(s => (
-                             <option key={s.id} value={s.id}>{s.name} (${s.price})</option>
-                         ))}
-                     </select>
-                 </div>
-                 <Button onClick={handleManualAdd} className="w-full mt-2">
-                     新增預約
-                 </Button>
-             </div>
-        </Modal>
+        {/* Batch Import & Manual Add Modals - Same as before */}
+        <Modal title="批量匯入預約" isOpen={isBatchOpen} onClose={() => setIsBatchOpen(false)}><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded text-xs text-yellow-800">格式: <strong>YYYY-MM-DD, HH:MM, 姓名, 電話, 服務名稱</strong><br/>範例: 2024-05-20, 13:00, 王大明, 0912345678, 頂級霧眉</div><textarea className="w-full h-40 p-3 bg-gray-50 border rounded-xl text-sm whitespace-pre" placeholder="請貼上 CSV 格式內容..." value={batchText} onChange={(e) => setBatchText(e.target.value)} /><Button onClick={handleBatchImport} className="w-full">開始匯入</Button></div></Modal>
+        <Modal title="快速新增預約" isOpen={isManualAddOpen} onClose={() => setIsManualAddOpen(false)}><div className="space-y-4"><div><label className="text-xs font-bold text-gray-500 block mb-1">店點</label><div className="flex gap-2">{LOCATIONS.map(l => (<button key={l.id} onClick={() => setManualBooking({...manualBooking, locationId: l.id})} className={`flex-1 py-2 text-sm rounded border ${manualBooking.locationId === l.id ? 'bg-[#8d6e63] text-white border-[#8d6e63]' : 'bg-white border-gray-200'}`}>{l.name}</button>))}</div></div><div className="flex gap-2"><div className="flex-1"><label className="text-xs font-bold text-gray-500 block mb-1">日期</label><input type="date" className="w-full p-2 border rounded" value={manualBooking.date} onChange={e => setManualBooking({...manualBooking, date: e.target.value})} /></div><div className="flex-1"><label className="text-xs font-bold text-gray-500 block mb-1">時間</label><input type="time" className="w-full p-2 border rounded" value={manualBooking.time} onChange={e => setManualBooking({...manualBooking, time: e.target.value})} /></div></div><div><label className="text-xs font-bold text-gray-500 block mb-1">顧客姓名</label><input className="w-full p-2 border rounded" value={manualBooking.name} onChange={e => setManualBooking({...manualBooking, name: e.target.value})} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">顧客電話</label><input className="w-full p-2 border rounded" value={manualBooking.phone} onChange={e => setManualBooking({...manualBooking, phone: e.target.value})} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">服務項目</label><select className="w-full p-2 border rounded bg-white" value={manualBooking.serviceId} onChange={e => setManualBooking({...manualBooking, serviceId: e.target.value})}><option value="">請選擇...</option>{services.sort((a,b)=>(a.order||0)-(b.order||0)).map(s => (<option key={s.id} value={s.id}>{s.name} (${s.price})</option>))}</select></div><Button onClick={handleManualAdd} className="w-full mt-2">新增預約</Button></div></Modal>
     </div>
   );
 }
@@ -1093,8 +1328,28 @@ export default function App() {
   };
 
   const handleTouchupSearch = () => {
+      // 這裡您可以填入實際的補色查詢邏輯，目前是模擬
       if(!touchupQuery) return alert('請輸入姓名或手機');
-      alert('🔍 查詢功能開發中：請稍後再來');
+      
+      // 模擬查詢結果 (開發階段)
+      // 如果您有真實 API，請用 fetch() 替換這裡
+      const mockResult = {
+        name: touchupQuery,
+        phone: "0912***345",
+        lastDate: "2023-10-15",
+        service: "頂級霧眉",
+        specialReminder: "請避開生理期",
+        eyebrowDiscountDate: "2024-01-15",
+        currentPriceInfo: { price: 2000, dateRange: "【優惠期】1/15 前" },
+        touchUpRanges: [
+          { dateRange: "1/15 前", price: 2000 },
+          { dateRange: "1/16 後", price: 3000 }
+        ]
+      };
+      
+      // 這裡需要開啟一個 Modal 來顯示查詢結果 (為了簡化，目前先用 alert 示意位置)
+      // 在您的下一版需求中，我們會把這裡變成漂亮的卡片彈窗
+      alert(`查詢結果：\n姓名: ${mockResult.name}\n上次項目: ${mockResult.service}\n目前價格: $${mockResult.currentPriceInfo.price}`);
   };
 
   if (page === 'admin-login') return <AdminLogin onLogin={() => setPage('admin')} onBack={() => setPage('home')} />;
