@@ -767,16 +767,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
         <div className="p-4">
             {tab === 'bookings' && (viewMode === 'list' ? renderBookingsList() : renderBookingsCalendar())}
             {tab === 'services' && renderServices()}
-            {tab === 'settings' && (
-                <div className="text-center text-gray-400 py-10">
-                    {/* Re-implementing simplified settings for context */}
-                    <div className="space-y-6 text-left">
-                        <div className="flex bg-white p-1 rounded-xl border shadow-sm">{LOCATIONS.map(l => (<button key={l.id} onClick={() => setSettingsLoc(l.id)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${settingsLoc === l.id ? 'bg-[#5d4037] text-white shadow-md' : 'text-gray-400'}`}>{l.name}</button>))}</div>
-                        <div className="bg-white p-4 rounded-2xl border"><h3 className="font-bold mb-2">預設每日時段</h3><textarea className="w-full p-3 bg-gray-50 border rounded-xl h-24 text-sm" defaultValue={settings[settingsLoc]?.timeSlots?.join(', ') || DEFAULT_SLOTS.join(', ')} onBlur={(e) => { const slots = e.target.value.split(',').map(s => s.trim()).filter(s => s); firebaseService.updateSettings(settingsLoc, { timeSlots: slots }); }} /></div>
-                        <div className="text-xs text-gray-400 text-center">如需設定特定日期公休，請使用月曆功能(簡化版暫略)</div>
-                    </div>
-                </div>
-            )}
+            {tab === 'settings' && renderSettings()}
             {tab === 'others' && (
                 <div className="space-y-6">
                     <div className="space-y-2">
@@ -811,7 +802,6 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 
         {/* Edit Modal */}
         <Modal title={editItem?.id ? '編輯' : '新增'} isOpen={isEditOpen} onClose={() => setIsEditOpen(false)}>
-            {/* ... Content same as before ... */}
             <div className="space-y-4">
                 {editType === 'service' && (<><input className="w-full p-2 border rounded" placeholder="名稱" value={editItem?.name || ''} onChange={e => setEditItem({...editItem, name: e.target.value})} /><div className="flex gap-2"><input className="w-1/2 p-2 border rounded" type="number" placeholder="價格" value={editItem?.price || ''} onChange={e => setEditItem({...editItem, price: Number(e.target.value)})} /><input className="w-1/2 p-2 border rounded" type="number" placeholder="時長(分)" value={editItem?.duration || 120} onChange={e => setEditItem({...editItem, duration: Number(e.target.value)})} /></div><select className="w-full p-2 border rounded" value={editItem?.category || ''} onChange={e => setEditItem({...editItem, category: e.target.value})}>
                     <option value="">選擇類別</option>{MAIN_CATS.map(c => <option key={c} value={c}>{c}</option>)}</select><select className="w-full p-2 border rounded" value={editItem?.type || ''} onChange={e => setEditItem({...editItem, type: e.target.value})}><option value="">選擇類型</option>{SUB_CATS.map(c => <option key={c} value={c}>{c}</option>)}</select>{editItem?.type === '補色' && (<><select className="w-full p-2 border rounded" value={editItem?.session || ''} onChange={e => setEditItem({...editItem, session: e.target.value})}><option value="">選擇次數</option>{TOUCHUP_SESSIONS.map(c => <option key={c} value={c}>{c}</option>)}</select><input className="w-full p-2 border rounded" placeholder="時段 (3個月內)" value={editItem?.timeRange || ''} onChange={e => setEditItem({...editItem, timeRange: e.target.value})} /></>)}</>)}
@@ -883,7 +873,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
              </div>
         </Modal>
         
-        {/* Touchup Search Modal - Connected to GAS API with Fuzzy Match & Filtering */}
+        {/* Touchup Search Modal - Connected to GAS API with Filter Logic */}
         <Modal title="補色價格查詢" isOpen={!!touchupQuery && (page === 'home' || page === 'touchup')} onClose={() => { setTouchupQuery(''); setResults([]); setMsg({type:'', text:''}); }}>
              <div className="text-center p-1">
                  <div className="mb-4 text-left">
@@ -920,10 +910,6 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
           setResults([]);
           setMsg({ type: '', text: '' });
           
-          // Fuzzy match helper: try both with and without leading zero
-          // Or just send raw query and let GAS handle, but GAS script usually does exact match.
-          // Better logic: Query with raw input, if empty and input starts with 0, try without 0.
-          
           const fetchData = async (q: string) => {
               const res = await fetch(`${GAS_API_URL}?q=${encodeURIComponent(q)}`);
               return await res.json();
@@ -947,28 +933,24 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
                   }
 
                   if (data.data && data.data.length > 0) {
-                      // Filter logic: Keep only the latest record per service type
                       const uniqueMap = new Map();
-                      
-                      // Normalize name for grouping: remove content in brackets
+                      // Helper to strip brackets
                       const normalizeName = (name: string) => name.split('(')[0].trim();
 
                       data.data.forEach((item: TouchupRecord) => {
                           const baseName = normalizeName(item.name);
                           
-                          // Check if query was searching for a specific person (e.g. "林宜萱(媽媽)")
-                          // If query includes brackets, we want exact match.
-                          // If query is just name, we want all variants.
+                          // Match logic:
+                          // 1. If query has brackets (e.g. "Name(Mom)"), exact match name
+                          // 2. If query is just name (e.g. "Name"), match anything that includes "Name" OR starts with "Name"
                           const isMatch = touchupQuery.includes('(') 
                               ? item.name === touchupQuery 
                               : item.name.includes(touchupQuery) || baseName.includes(touchupQuery);
 
                           if (isMatch) {
-                              // Use composite key: Name + Service to distinguish different people/services
+                              // Key is Name + Service to separate different people/services
                               const key = `${item.name}-${item.service}`;
                               const existing = uniqueMap.get(key);
-                              
-                              // Compare dates: keep the latest one
                               if (!existing || item.lastDate > existing.lastDate) {
                                   uniqueMap.set(key, item);
                               }
