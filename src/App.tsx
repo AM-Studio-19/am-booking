@@ -1,12 +1,10 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
+import * as firebaseApp from 'firebase/app';
 import { 
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, 
   query, where, orderBy, limit, Timestamp, writeBatch, onSnapshot, setDoc, getDocs 
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
-import liff from '@line/liff';
 
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS (全域設定)
@@ -92,7 +90,7 @@ export interface TouchupRecord {
 // 3. FIREBASE SERVICE (後端邏輯)
 // ==========================================
 
-const app = initializeApp(FIREBASE_CONFIG);
+const app = firebaseApp.initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const getPublicDataRef = () => doc(db, 'artifacts', APP_ID, 'public', 'data');
@@ -490,21 +488,21 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
         <div className="pl-3">
             <div className="flex justify-between items-start mb-2">
                 <div>
-                    <div className="font-bold text-lg text-[#5d4037]">{b.date} {b.time}</div>
-                    <div className="text-gray-600">{b.customerName} <span className="text-xs text-gray-400">({b.customerPhone})</span></div>
-                    <div className="text-xs text-[#8d6e63] mt-1 bg-[#faf9f6] inline-block px-2 py-0.5 rounded border border-[#e7e0da]">{b.locationName}</div>
+                    <div className="font-bold text-lg text-[#5d4037]">{String(b.date || '')} {String(b.time || '')}</div>
+                    <div className="text-gray-600">{String(b.customerName || '')} <span className="text-xs text-gray-400">({String(b.customerPhone || '')})</span></div>
+                    <div className="text-xs text-[#8d6e63] mt-1 bg-[#faf9f6] inline-block px-2 py-0.5 rounded border border-[#e7e0da]">{String(b.locationName || '')}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                     <span className={`text-xs px-2 py-1 rounded font-bold ${b.status === 'confirmed' ? 'bg-green-100 text-green-700' : b.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                         {b.status === 'confirmed' ? '已確認' : b.status === 'cancelled' ? '已取消' : '待確認'}
                     </span>
                     <span className={`text-xs px-2 py-1 rounded font-bold ${b.paymentStatus === 'verified' ? 'bg-green-100 text-green-700' : b.paymentStatus === 'reported' ? 'bg-blue-100 text-blue-700' : 'bg-red-50 text-red-500'}`}>
-                        {b.paymentStatus === 'verified' ? '已付訂' : b.paymentStatus === 'reported' ? `已回報 (${b.paymentInfo?.last5})` : '未付訂'}
+                        {b.paymentStatus === 'verified' ? '已付訂' : b.paymentStatus === 'reported' ? `已回報 (${b.paymentInfo?.last5 || ''})` : '未付訂'}
                     </span>
                 </div>
             </div>
-            <div className="text-sm text-gray-500 mb-2">{b.serviceName} | ${b.totalPrice}</div>
-            <div className="text-xs text-gray-400 mb-2">預計時長: {Math.floor(b.serviceDuration/60)}h {b.serviceDuration%60}m</div>
+            <div className="text-sm text-gray-500 mb-2">{String(b.serviceName || '')} | ${b.totalPrice}</div>
+            <div className="text-xs text-gray-400 mb-2">預計時長: {Math.floor((b.serviceDuration || 0)/60)}h {(b.serviceDuration || 0)%60}m</div>
             {b.notes && <div className="text-xs text-gray-400 bg-gray-50 p-2 rounded mb-2">備註: {b.notes}</div>}
             
             <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
@@ -538,7 +536,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
       const pendingPayment = targetBookings.filter(b => b.paymentStatus === 'unpaid');
       const pendingVerify = targetBookings.filter(b => b.paymentStatus === 'reported');
       const pendingConfirm = targetBookings.filter(b => b.status === 'pending' && b.paymentStatus === 'verified');
-      const upcoming = targetBookings.filter(b => b.status === 'confirmed' && new Date(b.date) >= new Date()).sort((a,b) => a.date.localeCompare(b.date));
+      const upcoming = targetBookings.filter(b => b.status === 'confirmed' && new Date(b.date) >= new Date()).sort((a,b) => (a.date || '').localeCompare(b.date || ''));
       const history = targetBookings.filter(b => b.status === 'confirmed' && new Date(b.date) < new Date());
       
       const cancelledList = targetBookings; 
@@ -595,7 +593,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
       }
     });
 
-    const selectedBookings = bookings.filter(b => b.date === calSelected && b.status !== 'cancelled').sort((a,b) => a.time.localeCompare(b.time));
+    const selectedBookings = bookings.filter(b => b.date === calSelected && b.status !== 'cancelled').sort((a,b) => (a.time || '').localeCompare(b.time || ''));
 
     return (
       <div className="space-y-4">
@@ -897,29 +895,6 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
                  <div><label className="text-xs font-bold text-gray-500 block mb-1">顧客電話</label><input className="w-full p-2 border rounded" value={manualBooking.phone} onChange={e => setManualBooking({...manualBooking, phone: e.target.value})} /></div>
                  <div><label className="text-xs font-bold text-gray-500 block mb-1">服務項目</label><select className="w-full p-2 border rounded bg-white" value={manualBooking.serviceId} onChange={e => setManualBooking({...manualBooking, serviceId: e.target.value})}><option value="">請選擇...</option>{services.sort((a,b)=>(a.order||0)-(b.order||0)).map(s => (<option key={s.id} value={s.id}>{s.name} (${s.price})</option>))}</select></div>
                  <Button onClick={handleManualAdd} className="w-full mt-2">新增預約</Button>
-             </div>
-        </Modal>
-        
-        {/* Touchup Search Modal - Connected to GAS API with Fuzzy Match & Filtering */}
-        <Modal title="補色價格查詢" isOpen={!!touchupQuery && (page === 'home' || page === 'touchup')} onClose={() => { setTouchupQuery(''); setResults([]); setMsg({type:'', text:''}); }}>
-             <div className="text-center p-1">
-                 <div className="mb-4 text-left">
-                     <p className="text-sm text-gray-500 mb-2">正在查詢：<span className="font-bold text-[#5d4037]">{touchupQuery}</span></p>
-                 </div>
-
-                 {searching && <div className="py-8"><Spinner /></div>}
-                 
-                 {!searching && msg.text && (
-                     <div className={`p-3 rounded-xl text-sm mb-4 font-bold ${msg.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                         {msg.text}
-                     </div>
-                 )}
-
-                 {!searching && results.map((r, i) => <TouchupResultCard key={i} r={r} />)}
-                 
-                 <div className="mt-4">
-                     <Button variant="outline" onClick={() => { setTouchupQuery(''); setResults([]); }}>關閉</Button>
-                 </div>
              </div>
         </Modal>
     </div>
