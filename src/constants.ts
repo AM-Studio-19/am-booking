@@ -32,4 +32,4 @@ export const MOCK_SERVICES = [
   { id: '1', name: '頂級霧眉 (首次)', price: 6000, category: '霧眉', type: '首次', order: 1, duration: 120 },
   { id: '2', name: '水嫩霧唇 (首次)', price: 8000, category: '霧唇', type: '首次', order: 2, duration: 150 },
   { id: '3', name: '霧眉補色 (第一次)', price: 2000, category: '霧眉', type: '補色', session: '第一次回補', timeRange: '3個月內', duration: 90 },
-  { id: '4', name: '霧唇補色 (第一次)', price: 3000, category: '霧唇', type: '補色', session: '第一次回補', timeRange: '3個月內', duration: 120 },
+  { id: '4', name: '霧唇補色 (第一次)', price: 3000, category: '霧唇', type: '補色', session: '第一次回補', timeRange: '3個月內', duration: 120 },];
