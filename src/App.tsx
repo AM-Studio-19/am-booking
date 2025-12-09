@@ -7,7 +7,7 @@ import {
 import { getAuth, signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
 import liff from '@line/liff';
 
-// --- 1. CONSTANTS & CONFIG (整合進來，不再依賴外部檔案) ---
+// --- 1. CONSTANTS & CONFIG ---
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCzCXFgd7VrWHyHrM3GILQ2JHzQaa7yoIw",
   authDomain: "amstudio-booking.firebaseapp.com",
@@ -25,6 +25,7 @@ const BANK_INFO = {
   account: '1234-5678-9012',
   amountPerPerson: 1000
 };
+// GAS API URL for Touchup Search
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx6grwl5DidK6DScAaZLM8udp-Pjn_FrB33bv6ES0JkwAiiIx-xxJHicxANVGH7caSpEg/exec";
 
 const LOCATIONS = [
@@ -39,7 +40,7 @@ const MOCK_SERVICES = [
   { id: '1', name: '頂級霧眉 (首次)', price: 6000, category: '霧眉', type: '首次', order: 1, duration: 120 },
   { id: '2', name: '水嫩霧唇 (首次)', price: 8000, category: '霧唇', type: '首次', order: 2, duration: 150 },
   { id: '3', name: '霧眉補色 (第一次)', price: 2000, category: '霧眉', type: '補色', session: '第一次回補', timeRange: '3個月內', duration: 90 },
-  { id: '4', name: '霧唇補色 (第一次)', price: 3000, category: '霧唇', type: '補色', session: '第一次回補', timeRange: '3個月內', duration: 120 }
+  { id: '4', name: '霧唇補色 (第一次)', price: 3000, category: '霧唇', type: '補色', session: '第一次回補', timeRange: '3個月內', duration: 120 },
 ];
 
 // --- 2. TYPES ---
@@ -909,10 +910,6 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
           setResults([]);
           setMsg({ type: '', text: '' });
           
-          // Fuzzy match helper: try both with and without leading zero
-          // Or just send raw query and let GAS handle, but GAS script usually does exact match.
-          // Better logic: Query with raw input, if empty and input starts with 0, try without 0.
-          
           const fetchData = async (q: string) => {
               const res = await fetch(`${GAS_API_URL}?q=${encodeURIComponent(q)}`);
               return await res.json();
@@ -920,44 +917,38 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 
           const runSearch = async () => {
               try {
-                  // First try exact match
+                  // 1. Try exact match first
                   let data = await fetchData(touchupQuery);
                   
-                  // If no data and looks like phone number starting with 0, try removing 0
+                  // 2. Fuzzy Phone: If input starts with 0, try removing it
                   if ((!data.data || data.data.length === 0) && touchupQuery.startsWith('0') && !isNaN(Number(touchupQuery))) {
                       const altQuery = touchupQuery.substring(1);
                       data = await fetchData(altQuery);
                   }
                   
-                  // If still no data and looks like phone number WITHOUT 0 (e.g. 912345678), try adding 0
+                  // 3. Fuzzy Phone: If input missing 0, try adding it
                   if ((!data.data || data.data.length === 0) && !touchupQuery.startsWith('0') && !isNaN(Number(touchupQuery)) && touchupQuery.length === 9) {
                        const altQuery = '0' + touchupQuery;
                        data = await fetchData(altQuery);
                   }
 
                   if (data.data && data.data.length > 0) {
-                      // Filter logic: Keep only the latest record per service type
                       const uniqueMap = new Map();
-                      
-                      // Normalize name for grouping: remove content in brackets
                       const normalizeName = (name: string) => name.split('(')[0].trim();
 
                       data.data.forEach((item: TouchupRecord) => {
                           const baseName = normalizeName(item.name);
                           
-                          // Check if query was searching for a specific person (e.g. "林宜萱(媽媽)")
-                          // If query includes brackets, we want exact match.
-                          // If query is just name, we want all variants.
+                          // Fuzzy Name Match Logic:
+                          // If query has brackets, exact match name.
+                          // If query is base name (e.g. "Name"), match "Name" OR "Name(Mom)"
                           const isMatch = touchupQuery.includes('(') 
                               ? item.name === touchupQuery 
-                              : item.name.includes(touchupQuery) || baseName.includes(touchupQuery);
+                              : item.name.includes(touchupQuery) || baseName.includes(touchupQuery); // Includes allows "林宜萱" to match "林宜萱(媽媽)"
 
                           if (isMatch) {
-                              // Use composite key: Name + Service to distinguish different people/services
-                              const key = `${item.name}-${item.service}`;
+                              const key = `${item.name}-${item.service}`; // Distinguish different people/services
                               const existing = uniqueMap.get(key);
-                              
-                              // Compare dates: keep the latest one
                               if (!existing || item.lastDate > existing.lastDate) {
                                   uniqueMap.set(key, item);
                               }
