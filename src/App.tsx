@@ -5,7 +5,6 @@ import {
   query, where, orderBy, limit, Timestamp, writeBatch, onSnapshot, setDoc, getDocs 
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
-import liff from '@line/liff'; // 引入 LINE LIFF
 
 // --- 1. CONSTANTS & CONFIG ---
 const FIREBASE_CONFIG = {
@@ -16,8 +15,6 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "197698776484",
   appId: "1:197698776484:web:818beeea66d470bfc36531"
 };
-// 更新您的 LIFF ID
-const LIFF_ID = '2008567948-KGMPJPGe';
 const APP_ID = 'booking-system-web';
 const ADMIN_PIN = '1234';
 const BANK_INFO = {
@@ -180,9 +177,7 @@ const Button: React.FC<ButtonProps> = ({ onClick, children, variant = "primary",
     ghost: "bg-transparent text-gray-400 hover:text-[#8d6e63] p-2",
     danger: "bg-red-50 text-red-400 hover:bg-red-100 p-2",
   };
-  return (
-    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>{children}</button>
-  );
+  return <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>{children}</button>;
 };
 
 const Modal: React.FC<{ title: string; isOpen: boolean; onClose: () => void; children?: React.ReactNode }> = ({ title, isOpen, onClose, children }) => {
@@ -336,34 +331,17 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
                     <div className="text-xs text-[#8d6e63] mt-1 bg-[#faf9f6] inline-block px-2 py-0.5 rounded border border-[#e7e0da]">{b.locationName}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                    <span className={`text-xs px-2 py-1 rounded font-bold ${b.status === 'confirmed' ? 'bg-green-100 text-green-700' : b.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                        {b.status === 'confirmed' ? '已確認' : b.status === 'cancelled' ? '已取消' : '待確認'}
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded font-bold ${b.paymentStatus === 'verified' ? 'bg-green-100 text-green-700' : b.paymentStatus === 'reported' ? 'bg-blue-100 text-blue-700' : 'bg-red-50 text-red-500'}`}>
-                        {b.paymentStatus === 'verified' ? '已付訂' : b.paymentStatus === 'reported' ? `已回報 (${b.paymentInfo?.last5})` : '未付訂'}
-                    </span>
+                    <span className={`text-xs px-2 py-1 rounded font-bold ${b.status === 'confirmed' ? 'bg-green-100 text-green-700' : b.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{b.status === 'confirmed' ? '已確認' : b.status === 'cancelled' ? '已取消' : '待確認'}</span>
+                    <span className={`text-xs px-2 py-1 rounded font-bold ${b.paymentStatus === 'verified' ? 'bg-green-100 text-green-700' : b.paymentStatus === 'reported' ? 'bg-blue-100 text-blue-700' : 'bg-red-50 text-red-500'}`}>{b.paymentStatus === 'verified' ? '已付訂' : b.paymentStatus === 'reported' ? `已回報 (${b.paymentInfo?.last5})` : '未付訂'}</span>
                 </div>
             </div>
             <div className="text-sm text-gray-500 mb-2">{b.serviceName} | ${b.totalPrice}</div>
             <div className="text-xs text-gray-400 mb-2">預計時長: {Math.floor(b.serviceDuration/60)}h {b.serviceDuration%60}m</div>
             {b.notes && <div className="text-xs text-gray-400 bg-gray-50 p-2 rounded mb-2">備註: {b.notes}</div>}
-            
             <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
-                {b.paymentStatus !== 'verified' && b.status !== 'cancelled' && (
-                    <button onClick={() => openActionModal(b, 'verify')} className="text-xs bg-green-100 text-green-700 px-3 py-2 rounded hover:bg-green-200 font-bold">
-                        確認收款
-                    </button>
-                )}
-                {b.status === 'pending' && (
-                    <button onClick={() => openActionModal(b, 'confirm')} className="text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded hover:bg-blue-200 font-bold">
-                        確認預約
-                    </button>
-                )}
-                {b.status !== 'cancelled' && (
-                    <button onClick={() => openActionModal(b, 'cancel')} className="text-xs bg-red-100 text-red-700 px-3 py-2 rounded hover:bg-red-200 font-bold">
-                        取消預約
-                    </button>
-                )}
+                {b.paymentStatus !== 'verified' && b.status !== 'cancelled' && <button onClick={() => openActionModal(b, 'verify')} className="text-xs bg-green-100 text-green-700 px-3 py-2 rounded hover:bg-green-200 font-bold">確認收款</button>}
+                {b.status === 'pending' && <button onClick={() => openActionModal(b, 'confirm')} className="text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded hover:bg-blue-200 font-bold">確認預約</button>}
+                {b.status !== 'cancelled' && <button onClick={() => openActionModal(b, 'cancel')} className="text-xs bg-red-100 text-red-700 px-3 py-2 rounded hover:bg-red-200 font-bold">取消預約</button>}
             </div>
         </div>
     </Card>
@@ -376,78 +354,25 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
       const upcoming = bookings.filter(b => b.status === 'confirmed' && new Date(b.date) >= new Date()).sort((a,b) => a.date.localeCompare(b.date));
       const history = bookings.filter(b => b.status === 'confirmed' && new Date(b.date) < new Date());
       const cancelled = bookings.filter(b => b.status === 'cancelled');
-
-      const Section = ({ title, list }: { title: string, list: BookingRecord[] }) => (
-          list.length > 0 ? (
-              <div className="mb-6">
-                  <h3 className="font-bold text-[#8d6e63] mb-3 px-1">{title} ({list.length})</h3>
-                  {list.map(b => <BookingCard key={b.id} b={b} />)}
-              </div>
-          ) : null
-      );
-
+      const Section = ({ title, list }: any) => ( list.length > 0 ? ( <div className="mb-6"><h3 className="font-bold text-[#8d6e63] mb-3 px-1">{title} ({list.length})</h3>{list.map((b: any) => <BookingCard key={b.id} b={b} />)}</div> ) : null );
       return (
           <div className="pb-20">
-              <div className="mb-4 flex gap-2">
-                  <Button variant="outline" onClick={() => setIsManualAddOpen(true)} className="flex-1 border-dashed text-sm py-2">
-                      <Icon name="plus" size={16}/> 快速新增
-                  </Button>
-                  <Button variant="outline" onClick={() => setIsBatchOpen(true)} className="w-1/3 border-dashed text-sm py-2">
-                      批量匯入
-                  </Button>
-              </div>
-              <Section title="待確認款項 (已回報)" list={pendingVerify} />
-              <Section title="待付訂金" list={pendingPayment} />
-              <Section title="已付訂 / 待確認預約" list={pendingConfirm} />
-              <Section title="即將到來" list={upcoming} />
-              <Section title="歷史訂單" list={history} />
-              <Section title="已取消" list={cancelled} />
+              <div className="mb-4 flex gap-2"><Button variant="outline" onClick={() => setIsManualAddOpen(true)} className="flex-1 border-dashed text-sm py-2"><Icon name="plus" size={16}/> 快速新增</Button><Button variant="outline" onClick={() => setIsBatchOpen(true)} className="w-1/3 border-dashed text-sm py-2">批量匯入</Button></div>
+              <Section title="待確認款項 (已回報)" list={pendingVerify} /><Section title="待付訂金" list={pendingPayment} /><Section title="已付訂 / 待確認預約" list={pendingConfirm} /><Section title="即將到來" list={upcoming} /><Section title="歷史訂單" list={history} /><Section title="已取消" list={cancelled} />
           </div>
       );
   };
 
   const renderBookingsCalendar = () => {
-    const y = calDate.getFullYear();
-    const m = calDate.getMonth();
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const startDay = new Date(y, m, 1).getDay();
-    const bookMap: Record<string, { hasPending: boolean, count: number }> = {};
-    bookings.forEach(b => {
-      if (b.status !== 'cancelled') {
-        if (!bookMap[b.date]) bookMap[b.date] = { hasPending: false, count: 0 };
-        if (b.status === 'pending') bookMap[b.date].hasPending = true;
-        bookMap[b.date].count++;
-      }
-    });
-
+    const y = calDate.getFullYear(); const m = calDate.getMonth(); const daysInMonth = new Date(y, m + 1, 0).getDate(); const startDay = new Date(y, m, 1).getDay();
+    const bookMap: any = {}; bookings.forEach(b => { if (b.status !== 'cancelled') { if (!bookMap[b.date]) bookMap[b.date] = { hasPending: false, count: 0 }; if (b.status === 'pending') bookMap[b.date].hasPending = true; bookMap[b.date].count++; } });
     const selectedBookings = bookings.filter(b => b.date === calSelected).sort((a,b) => a.time.localeCompare(b.time));
-
     return (
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-3xl border shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-            <button onClick={() => setCalDate(new Date(y, m - 1))} className="px-3 py-1 bg-gray-100 rounded">&lt;</button>
-            <span className="font-bold text-lg">{y}年 {m + 1}月</span>
-            <button onClick={() => setCalDate(new Date(y, m + 1))} className="px-3 py-1 bg-gray-100 rounded">&gt;</button>
-            </div>
+            <div className="flex justify-between items-center mb-4"><button onClick={() => setCalDate(new Date(y, m - 1))} className="px-3 py-1 bg-gray-100 rounded">&lt;</button><span className="font-bold text-lg">{y}年 {m + 1}月</span><button onClick={() => setCalDate(new Date(y, m + 1))} className="px-3 py-1 bg-gray-100 rounded">&gt;</button></div>
             <div className="grid grid-cols-7 gap-1 text-center text-xs mb-2 text-gray-400">{['日', '一', '二', '三', '四', '五', '六'].map(d => <div key={d}>{d}</div>)}</div>
-            <div className="grid grid-cols-7 gap-1">
-            {Array.from({ length: startDay }).map((_, i) => <div key={'e' + i} />)}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-                const d = i + 1;
-                const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const info = bookMap[dStr];
-                const isSel = calSelected === dStr;
-                return (
-                <div key={d} onClick={() => setCalSelected(dStr)} 
-                    className={`aspect-square flex flex-col items-center justify-center rounded-xl font-medium cursor-pointer transition-all border 
-                    ${isSel ? 'bg-[#8D6E63] text-white border-transparent' : 'bg-white border-gray-100 text-gray-700'}`}>
-                    <span>{d}</span>
-                    {info && <div className={`w-1.5 h-1.5 rounded-full mt-1 ${info.hasPending ? 'bg-yellow-400' : 'bg-green-500'}`}></div>}
-                </div>
-                );
-            })}
-            </div>
+            <div className="grid grid-cols-7 gap-1">{Array.from({ length: startDay }).map((_, i) => <div key={'e' + i} />)}{Array.from({ length: daysInMonth }).map((_, i) => { const d = i + 1; const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const info = bookMap[dStr]; const isSel = calSelected === dStr; return (<div key={d} onClick={() => setCalSelected(dStr)} className={`aspect-square flex flex-col items-center justify-center rounded-xl font-medium cursor-pointer transition-all border ${isSel ? 'bg-[#8D6E63] text-white border-transparent' : 'bg-white border-gray-100 text-gray-700'}`}><span>{d}</span>{info && <div className={`w-1.5 h-1.5 rounded-full mt-1 ${info.hasPending ? 'bg-yellow-400' : 'bg-green-500'}`}></div>}</div>); })}</div>
         </div>
         {calSelected && selectedBookings.map(b => <BookingCard key={b.id} b={b} />)}
         {calSelected && selectedBookings.length === 0 && <div className="text-center text-gray-400 py-8">無預約資料</div>}
@@ -460,318 +385,51 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
     return (
         <div className="space-y-3">
             <Button onClick={() => { setEditItem({ duration: 120 }); setEditType('service'); setIsEditOpen(true); }} className="w-full">新增服務</Button>
-            {sorted.map(s => (
-                <div key={s.id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center">
-                    <div>
-                        <div className="font-bold text-[#5d4037]">{s.name}</div>
-                        <div className="text-xs text-gray-400">{s.category} - {s.type} | ${s.price} | {s.duration || 120}分鐘</div>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => { firebaseService.updateItem('services', s.id, { order: (s.order||0)-1 }); }} className="p-1 bg-gray-100 rounded">⬆</button>
-                        <button onClick={() => { firebaseService.updateItem('services', s.id, { order: (s.order||0)+1 }); }} className="p-1 bg-gray-100 rounded">⬇</button>
-                        <button onClick={() => { setEditItem(s); setEditType('service'); setIsEditOpen(true); }} className="p-1 bg-blue-100 text-blue-600 rounded">✎</button>
-                        <button onClick={() => { if(confirm('刪除?')) firebaseService.deleteItem('services', s.id); }} className="p-1 bg-red-100 text-red-600 rounded">🗑</button>
-                    </div>
-                </div>
-            ))}
+            {sorted.map(s => (<div key={s.id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center"><div><div className="font-bold text-[#5d4037]">{s.name}</div><div className="text-xs text-gray-400">{s.category} - {s.type} | ${s.price} | {s.duration || 120}分鐘</div></div><div className="flex gap-2"><button onClick={() => { firebaseService.updateItem('services', s.id, { order: (s.order||0)-1 }); }} className="p-1 bg-gray-100 rounded">⬆</button><button onClick={() => { firebaseService.updateItem('services', s.id, { order: (s.order||0)+1 }); }} className="p-1 bg-gray-100 rounded">⬇</button><button onClick={() => { setEditItem(s); setEditType('service'); setIsEditOpen(true); }} className="p-1 bg-blue-100 text-blue-600 rounded">✎</button><button onClick={() => { if(confirm('刪除?')) firebaseService.deleteItem('services', s.id); }} className="p-1 bg-red-100 text-red-600 rounded">🗑</button></div></div>))}
         </div>
     );
   };
 
   const renderSettings = () => {
-      const y = calDate.getFullYear();
-      const m = calDate.getMonth();
-      const days = new Date(y, m+1, 0).getDate();
-      
-      const locId = settingsLoc; 
-      const currentGlobalSlots = settings[locId]?.timeSlots?.join(', ') || DEFAULT_SLOTS.join(', ');
-      
-      // Date specific slots
-      const dateKey = calSelected || '';
-      const specificSlots = settings[locId]?.specialRules?.[dateKey];
-
+      const y = calDate.getFullYear(); const m = calDate.getMonth(); const days = new Date(y, m+1, 0).getDate(); const locId = settingsLoc; const currentGlobalSlots = settings[locId]?.timeSlots?.join(', ') || DEFAULT_SLOTS.join(', '); const dateKey = calSelected || ''; const specificSlots = settings[locId]?.specialRules?.[dateKey];
       return (
           <div className="space-y-6">
-              {/* Location Switcher for Settings */}
-              <div className="flex bg-white p-1 rounded-xl border shadow-sm">
-                  {LOCATIONS.map(l => (
-                      <button 
-                          key={l.id}
-                          onClick={() => setSettingsLoc(l.id)}
-                          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${settingsLoc === l.id ? 'bg-[#5d4037] text-white shadow-md' : 'text-gray-400'}`}>
-                          {l.name}
-                      </button>
-                  ))}
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border">
-                  <h3 className="font-bold mb-4">營業日設定 ({LOCATIONS.find(l=>l.id===locId)?.name})</h3>
-                  <div className="flex justify-between mb-2">
-                     <button onClick={()=>setCalDate(new Date(y, m-1))} className="px-2 bg-gray-100 rounded">&lt;</button>
-                     <span>{y}/{m+1}</span>
-                     <button onClick={()=>setCalDate(new Date(y, m+1))} className="px-2 bg-gray-100 rounded">&gt;</button>
-                  </div>
-                  <div className="grid grid-cols-7 gap-2">
-                      {Array.from({length: days}).map((_, i) => {
-                          const d = i+1;
-                          const dStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                          const allowed = settings[locId]?.allowedDates?.includes(dStr);
-                          const isSel = calSelected === dStr;
-                          return (
-                              <button key={d} 
-                                onClick={() => setCalSelected(dStr)}
-                                className={`h-8 rounded relative border ${allowed ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-300 border-transparent'} ${isSel ? 'ring-2 ring-[#8d6e63]' : ''}`}>
-                                {d}
-                              </button>
-                          )
-                      })}
-                  </div>
-                  
-                  {calSelected && (
-                      <div className="mt-4 pt-4 border-t">
-                           <div className="flex justify-between items-center mb-2">
-                               <div className="text-sm font-bold text-[#5d4037]">設定日期: {calSelected}</div>
-                               <button 
-                                 onClick={() => {
-                                    const current = settings[locId]?.allowedDates || [];
-                                    const next = current.includes(calSelected) ? current.filter(x=>x!==calSelected) : [...current, calSelected];
-                                    firebaseService.updateSettings(locId, { allowedDates: next });
-                                 }}
-                                 className={`text-xs px-3 py-1 rounded font-bold ${settings[locId]?.allowedDates?.includes(calSelected) ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-                                 {settings[locId]?.allowedDates?.includes(calSelected) ? '設為公休' : '設為營業'}
-                               </button>
-                           </div>
-                           
-                           {settings[locId]?.allowedDates?.includes(calSelected) && (
-                               <div className="bg-gray-50 p-3 rounded-xl border mt-2">
-                                   <label className="text-xs font-bold text-[#8d6e63] mb-1 block">當日特殊時段 (留空則使用預設)</label>
-                                   <input 
-                                     className="w-full p-2 border rounded text-sm"
-                                     placeholder="e.g. 10:00, 14:00 (預設覆蓋)"
-                                     value={specificSlots ? specificSlots.join(', ') : ''}
-                                     onChange={(e) => {
-                                         const val = e.target.value;
-                                         const newMap = { ...(settings[locId]?.specialRules || {}) };
-                                         if(!val.trim()) delete newMap[calSelected];
-                                         else newMap[calSelected] = val.split(',').map(s=>s.trim()).filter(s=>s);
-                                         firebaseService.updateSettings(locId, { specialRules: newMap });
-                                     }}
-                                   />
-                                   <div className="text-[10px] text-gray-400 mt-1">預設時段: {currentGlobalSlots}</div>
-                               </div>
-                           )}
-                      </div>
-                  )}
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border">
-                  <h3 className="font-bold mb-2">預設每日時段 ({LOCATIONS.find(l=>l.id===locId)?.name})</h3>
-                  <textarea 
-                    className="w-full p-3 bg-gray-50 border rounded-xl h-24 text-sm"
-                    defaultValue={currentGlobalSlots}
-                    onBlur={(e) => {
-                        const slots = e.target.value.split(',').map(s => s.trim()).filter(s => s);
-                        firebaseService.updateSettings(locId, { timeSlots: slots });
-                    }}
-                  />
-              </div>
+              <div className="flex bg-white p-1 rounded-xl border shadow-sm">{LOCATIONS.map(l => (<button key={l.id} onClick={() => setSettingsLoc(l.id)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${settingsLoc === l.id ? 'bg-[#5d4037] text-white shadow-md' : 'text-gray-400'}`}>{l.name}</button>))}</div>
+              <div className="bg-white p-4 rounded-2xl border"><h3 className="font-bold mb-4">營業日設定 ({LOCATIONS.find(l=>l.id===locId)?.name})</h3><div className="flex justify-between mb-2"><button onClick={()=>setCalDate(new Date(y, m-1))} className="px-2 bg-gray-100 rounded">&lt;</button><span>{y}/{m+1}</span><button onClick={()=>setCalDate(new Date(y, m+1))} className="px-2 bg-gray-100 rounded">&gt;</button></div><div className="grid grid-cols-7 gap-2">{Array.from({length: days}).map((_, i) => { const d = i+1; const dStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const allowed = settings[locId]?.allowedDates?.includes(dStr); const isSel = calSelected === dStr; return (<button key={d} onClick={() => setCalSelected(dStr)} className={`h-8 rounded relative border ${allowed ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-300 border-transparent'} ${isSel ? 'ring-2 ring-[#8d6e63]' : ''}`}>{d}</button>) })}</div>{calSelected && (<div className="mt-4 pt-4 border-t"><div className="flex justify-between items-center mb-2"><div className="text-sm font-bold text-[#5d4037]">設定日期: {calSelected}</div><button onClick={() => { const current = settings[locId]?.allowedDates || []; const next = current.includes(calSelected) ? current.filter((x:any)=>x!==calSelected) : [...current, calSelected]; firebaseService.updateSettings(locId, { allowedDates: next }); }} className={`text-xs px-3 py-1 rounded font-bold ${settings[locId]?.allowedDates?.includes(calSelected) ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{settings[locId]?.allowedDates?.includes(calSelected) ? '設為公休' : '設為營業'}</button></div>{settings[locId]?.allowedDates?.includes(calSelected) && (<div className="bg-gray-50 p-3 rounded-xl border mt-2"><label className="text-xs font-bold text-[#8d6e63] mb-1 block">當日特殊時段 (留空則使用預設)</label><input className="w-full p-2 border rounded text-sm" placeholder="e.g. 10:00, 14:00 (預設覆蓋)" value={specificSlots ? specificSlots.join(', ') : ''} onChange={(e) => { const val = e.target.value; const newMap = { ...(settings[locId]?.specialRules || {}) }; if(!val.trim()) delete newMap[calSelected]; else newMap[calSelected] = val.split(',').map(s=>s.trim()).filter(s=>s); firebaseService.updateSettings(locId, { specialRules: newMap }); }} /><div className="text-[10px] text-gray-400 mt-1">預設時段: {currentGlobalSlots}</div></div>)}</div>)}</div>
+              <div className="bg-white p-4 rounded-2xl border"><h3 className="font-bold mb-2">預設每日時段 ({LOCATIONS.find(l=>l.id===locId)?.name})</h3><textarea className="w-full p-3 bg-gray-50 border rounded-xl h-24 text-sm" defaultValue={currentGlobalSlots} onBlur={(e) => { const slots = e.target.value.split(',').map(s => s.trim()).filter(s => s); firebaseService.updateSettings(locId, { timeSlots: slots }); }} /></div>
           </div>
       )
   };
 
-  const saveEdit = async () => {
-      const col = editType === 'service' ? 'services' : editType === 'discount' ? 'discounts' : 'templates';
-      if(editItem.id) await firebaseService.updateItem(col, editItem.id, editItem);
-      else await firebaseService.addItem(col, editItem);
-      setIsEditOpen(false);
-  };
+  const saveEdit = async () => { const col = editType === 'service' ? 'services' : editType === 'discount' ? 'discounts' : 'templates'; if(editItem.id) await firebaseService.updateItem(col, editItem.id, editItem); else await firebaseService.addItem(col, editItem); setIsEditOpen(false); };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 fade-in">
         <div className="bg-white sticky top-0 z-20 shadow-sm">
-            <div className="flex justify-between items-center p-4 border-b">
-                <h2 className="font-bold text-[#5d4037]">後台管理系統</h2>
-                <button onClick={onBack} className="text-xs bg-gray-100 px-3 py-1 rounded-full">登出</button>
-            </div>
-            <div className="flex overflow-x-auto no-scrollbar">
-                {['bookings', 'services', 'settings', 'others'].map(t => (
-                    <button key={t} onClick={() => setTab(t as any)} 
-                        className={`flex-1 py-3 text-sm font-bold border-b-2 whitespace-nowrap px-4 ${tab === t ? 'border-[#8d6e63] text-[#8d6e63]' : 'border-transparent text-gray-400'}`}>
-                        {t === 'bookings' ? '預約管理' : t === 'services' ? '服務項目' : t === 'settings' ? '營業設定' : '其他'}
-                    </button>
-                ))}
-            </div>
-            {tab === 'bookings' && (
-                <div className="flex border-b">
-                     <button onClick={() => setViewMode('list')} className={`flex-1 py-2 text-xs font-bold ${viewMode === 'list' ? 'bg-gray-100 text-[#5d4037]' : 'text-gray-400'}`}>列表模式</button>
-                     <button onClick={() => setViewMode('calendar')} className={`flex-1 py-2 text-xs font-bold ${viewMode === 'calendar' ? 'bg-gray-100 text-[#5d4037]' : 'text-gray-400'}`}>月曆模式</button>
-                </div>
-            )}
+            <div className="flex justify-between items-center p-4 border-b"><h2 className="font-bold text-[#5d4037]">後台管理系統</h2><button onClick={onBack} className="text-xs bg-gray-100 px-3 py-1 rounded-full">登出</button></div>
+            <div className="flex overflow-x-auto no-scrollbar">{['bookings', 'services', 'settings', 'others'].map(t => (<button key={t} onClick={() => setTab(t as any)} className={`flex-1 py-3 text-sm font-bold border-b-2 whitespace-nowrap px-4 ${tab === t ? 'border-[#8d6e63] text-[#8d6e63]' : 'border-transparent text-gray-400'}`}>{t === 'bookings' ? '預約管理' : t === 'services' ? '服務項目' : t === 'settings' ? '營業設定' : '其他'}</button>))}</div>
+            {tab === 'bookings' && (<div className="flex border-b"><button onClick={() => setViewMode('list')} className={`flex-1 py-2 text-xs font-bold ${viewMode === 'list' ? 'bg-gray-100 text-[#5d4037]' : 'text-gray-400'}`}>列表模式</button><button onClick={() => setViewMode('calendar')} className={`flex-1 py-2 text-xs font-bold ${viewMode === 'calendar' ? 'bg-gray-100 text-[#5d4037]' : 'text-gray-400'}`}>月曆模式</button></div>)}
         </div>
-        
         <div className="p-4">
             {tab === 'bookings' && (viewMode === 'list' ? renderBookingsList() : renderBookingsCalendar())}
             {tab === 'services' && renderServices()}
             {tab === 'settings' && renderSettings()}
-            {tab === 'others' && (
-                <div className="space-y-6">
-                    <div className="space-y-2">
-                        <h3 className="font-bold text-[#5d4037]">優惠身份</h3>
-                        <Button onClick={() => { setEditItem({}); setEditType('discount'); setIsEditOpen(true); }} className="w-full text-xs py-2">新增折扣</Button>
-                        {discounts.map(d => (
-                             <div key={d.id} className="flex justify-between bg-white p-3 rounded border">
-                                 <span>{d.name} (-${d.amount})</span>
-                                 <button onClick={() => firebaseService.deleteItem('discounts', d.id)} className="text-red-400">🗑</button>
-                             </div>
-                        ))}
-                    </div>
-                    <div className="space-y-2">
-                        <h3 className="font-bold text-[#5d4037]">訊息範本</h3>
-                        <Button onClick={() => { setEditItem({}); setEditType('template'); setIsEditOpen(true); }} className="w-full text-xs py-2">新增範本</Button>
-                        {templates.map(t => (
-                             <div key={t.id} className="bg-white p-3 rounded border">
-                                 <div className="font-bold text-sm flex justify-between">
-                                     {t.title} 
-                                     <button onClick={() => firebaseService.deleteItem('templates', t.id)} className="text-red-400">🗑</button>
-                                 </div>
-                                 <div className="text-xs text-gray-400 truncate">{t.content}</div>
-                             </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            {tab === 'others' && (<div className="space-y-6"><div className="space-y-2"><h3 className="font-bold text-[#5d4037]">優惠身份</h3><Button onClick={() => { setEditItem({}); setEditType('discount'); setIsEditOpen(true); }} className="w-full text-xs py-2">新增折扣</Button>{discounts.map((d) => (<div key={d.id} className="flex justify-between bg-white p-3 rounded border"><span>{d.name} (-${d.amount})</span><button onClick={() => firebaseService.deleteItem('discounts', d.id)} className="text-red-400">🗑</button></div>))}</div><div className="space-y-2"><h3 className="font-bold text-[#5d4037]">訊息範本</h3><Button onClick={() => { setEditItem({}); setEditType('template'); setIsEditOpen(true); }} className="w-full text-xs py-2">新增範本</Button>{templates.map((t) => (<div key={t.id} className="bg-white p-3 rounded border"><div className="font-bold text-sm flex justify-between">{t.title} <button onClick={() => firebaseService.deleteItem('templates', t.id)} className="text-red-400">🗑</button></div><div className="text-xs text-gray-400 truncate">{t.content}</div></div>))}</div></div>)}
         </div>
-
-        {/* Edit Modal */}
         <Modal title={editItem?.id ? '編輯' : '新增'} isOpen={isEditOpen} onClose={() => setIsEditOpen(false)}>
             <div className="space-y-4">
-                {editType === 'service' && (
-                    <>
-                        <input className="w-full p-2 border rounded" placeholder="名稱" value={editItem?.name || ''} onChange={e => setEditItem({...editItem, name: e.target.value})} />
-                        <div className="flex gap-2">
-                            <input className="w-1/2 p-2 border rounded" type="number" placeholder="價格" value={editItem?.price || ''} onChange={e => setEditItem({...editItem, price: Number(e.target.value)})} />
-                            <input className="w-1/2 p-2 border rounded" type="number" placeholder="時長(分)" value={editItem?.duration || 120} onChange={e => setEditItem({...editItem, duration: Number(e.target.value)})} />
-                        </div>
-                        <select className="w-full p-2 border rounded" value={editItem?.category || ''} onChange={e => setEditItem({...editItem, category: e.target.value})}>
-                            <option value="">選擇類別</option>
-                            {MAIN_CATS.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <select className="w-full p-2 border rounded" value={editItem?.type || ''} onChange={e => setEditItem({...editItem, type: e.target.value})}>
-                            <option value="">選擇類型</option>
-                            {SUB_CATS.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        {editItem?.type === '補色' && (
-                            <>
-                                <select className="w-full p-2 border rounded" value={editItem?.session || ''} onChange={e => setEditItem({...editItem, session: e.target.value})}>
-                                    <option value="">選擇次數</option>
-                                    {TOUCHUP_SESSIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                                <input className="w-full p-2 border rounded" placeholder="時段 (3個月內)" value={editItem?.timeRange || ''} onChange={e => setEditItem({...editItem, timeRange: e.target.value})} />
-                            </>
-                        )}
-                    </>
-                )}
-                {editType === 'discount' && (
-                    <>
-                        <input className="w-full p-2 border rounded" placeholder="名稱 (e.g. 學生)" value={editItem?.name || ''} onChange={e => setEditItem({...editItem, name: e.target.value})} />
-                        <input className="w-full p-2 border rounded" type="number" placeholder="折扣金額" value={editItem?.amount || ''} onChange={e => setEditItem({...editItem, amount: Number(e.target.value)})} />
-                    </>
-                )}
-                {editType === 'template' && (
-                    <>
-                         <input className="w-full p-2 border rounded" placeholder="標題" value={editItem?.title || ''} onChange={e => setEditItem({...editItem, title: e.target.value})} />
-                         <textarea className="w-full p-2 border rounded h-32" placeholder="內容 (可用變數 {{name}}, {{date}}...)" value={editItem?.content || ''} onChange={e => setEditItem({...editItem, content: e.target.value})} />
-                    </>
-                )}
+                {editType === 'service' && (<><input className="w-full p-2 border rounded" placeholder="名稱" value={editItem?.name || ''} onChange={e => setEditItem({...editItem, name: e.target.value})} /><div className="flex gap-2"><input className="w-1/2 p-2 border rounded" type="number" placeholder="價格" value={editItem?.price || ''} onChange={e => setEditItem({...editItem, price: Number(e.target.value)})} /><input className="w-1/2 p-2 border rounded" type="number" placeholder="時長(分)" value={editItem?.duration || 120} onChange={e => setEditItem({...editItem, duration: Number(e.target.value)})} /></div><select className="w-full p-2 border rounded" value={editItem?.category || ''} onChange={e => setEditItem({...editItem, category: e.target.value})}><option value="">選擇類別</option>{MAIN_CATS.map(c => <option key={c} value={c}>{c}</option>)}</select><select className="w-full p-2 border rounded" value={editItem?.type || ''} onChange={e => setEditItem({...editItem, type: e.target.value})}><option value="">選擇類型</option>{SUB_CATS.map(c => <option key={c} value={c}>{c}</option>)}</select>{editItem?.type === '補色' && (<><select className="w-full p-2 border rounded" value={editItem?.session || ''} onChange={e => setEditItem({...editItem, session: e.target.value})}><option value="">選擇次數</option>{TOUCHUP_SESSIONS.map(c => <option key={c} value={c}>{c}</option>)}</select><input className="w-full p-2 border rounded" placeholder="時段 (3個月內)" value={editItem?.timeRange || ''} onChange={e => setEditItem({...editItem, timeRange: e.target.value})} /></>)}</>)}
+                {editType === 'discount' && (<><input className="w-full p-2 border rounded" placeholder="名稱 (e.g. 學生)" value={editItem?.name || ''} onChange={e => setEditItem({...editItem, name: e.target.value})} /><input className="w-full p-2 border rounded" type="number" placeholder="折扣金額" value={editItem?.amount || ''} onChange={e => setEditItem({...editItem, amount: Number(e.target.value)})} /></>)}
+                {editType === 'template' && (<><input className="w-full p-2 border rounded" placeholder="標題" value={editItem?.title || ''} onChange={e => setEditItem({...editItem, title: e.target.value})} /><textarea className="w-full p-2 border rounded h-32" placeholder="內容 (可用變數 {{name}}, {{date}}...)" value={editItem?.content || ''} onChange={e => setEditItem({...editItem, content: e.target.value})} /></>)}
                 <Button onClick={saveEdit} className="w-full">儲存</Button>
             </div>
         </Modal>
-
-        {/* Action Confirmation Modal */}
-        <Modal title={actionType === 'confirm' ? '確認預約 & 複製訊息' : actionType === 'verify' ? '確認收款 & 複製訊息' : '取消預約 & 複製訊息'} 
-               isOpen={!!actionBooking} onClose={() => { setActionBooking(null); setActionType(null); }}>
-             <div className="space-y-4">
-                 <p className="text-sm text-gray-500">將執行狀態更新，並複製以下訊息供您傳送給客人：</p>
-                 <textarea 
-                    className="w-full h-40 p-3 bg-gray-50 border rounded-xl text-sm"
-                    value={actionMessage}
-                    onChange={(e) => setActionMessage(e.target.value)}
-                 />
-                 <Button onClick={executeAction} className="w-full">
-                     確認執行 & 複製訊息
-                 </Button>
-             </div>
-        </Modal>
-
-        {/* Batch Import Modal */}
-        <Modal title="批量匯入預約" isOpen={isBatchOpen} onClose={() => setIsBatchOpen(false)}>
-             <div className="space-y-4">
-                 <div className="bg-yellow-50 p-3 rounded text-xs text-yellow-800">
-                     格式: <strong>YYYY-MM-DD, HH:MM, 姓名, 電話, 服務名稱</strong><br/>
-                     範例: 2024-05-20, 13:00, 王大明, 0912345678, 頂級霧眉
-                 </div>
-                 <textarea 
-                    className="w-full h-40 p-3 bg-gray-50 border rounded-xl text-sm whitespace-pre"
-                    placeholder="請貼上 CSV 格式內容..."
-                    value={batchText}
-                    onChange={(e) => setBatchText(e.target.value)}
-                 />
-                 <Button onClick={handleBatchImport} className="w-full">
-                     開始匯入
-                 </Button>
-             </div>
-        </Modal>
-
-        {/* Manual Add Booking Modal */}
-        <Modal title="快速新增預約" isOpen={isManualAddOpen} onClose={() => setIsManualAddOpen(false)}>
-             <div className="space-y-4">
-                 <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">店點</label>
-                     <div className="flex gap-2">
-                         {LOCATIONS.map(l => (
-                             <button key={l.id} 
-                                 onClick={() => setManualBooking({...manualBooking, locationId: l.id})}
-                                 className={`flex-1 py-2 text-sm rounded border ${manualBooking.locationId === l.id ? 'bg-[#8d6e63] text-white border-[#8d6e63]' : 'bg-white border-gray-200'}`}>
-                                 {l.name}
-                             </button>
-                         ))}
-                     </div>
-                 </div>
-                 <div className="flex gap-2">
-                     <div className="flex-1">
-                         <label className="text-xs font-bold text-gray-500 block mb-1">日期</label>
-                         <input type="date" className="w-full p-2 border rounded" value={manualBooking.date} onChange={e => setManualBooking({...manualBooking, date: e.target.value})} />
-                     </div>
-                     <div className="flex-1">
-                         <label className="text-xs font-bold text-gray-500 block mb-1">時間</label>
-                         <input type="time" className="w-full p-2 border rounded" value={manualBooking.time} onChange={e => setManualBooking({...manualBooking, time: e.target.value})} />
-                     </div>
-                 </div>
-                 <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">顧客姓名</label>
-                     <input className="w-full p-2 border rounded" value={manualBooking.name} onChange={e => setManualBooking({...manualBooking, name: e.target.value})} />
-                 </div>
-                 <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">顧客電話</label>
-                     <input className="w-full p-2 border rounded" value={manualBooking.phone} onChange={e => setManualBooking({...manualBooking, phone: e.target.value})} />
-                 </div>
-                 <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">服務項目</label>
-                     <select className="w-full p-2 border rounded bg-white" value={manualBooking.serviceId} onChange={e => setManualBooking({...manualBooking, serviceId: e.target.value})}>
-                         <option value="">請選擇...</option>
-                         {services.sort((a,b)=>(a.order||0)-(b.order||0)).map(s => (
-                             <option key={s.id} value={s.id}>{s.name} (${s.price})</option>
-                         ))}
-                     </select>
-                 </div>
-                 <Button onClick={handleManualAdd} className="w-full mt-2">
-                     新增預約
-                 </Button>
-             </div>
-        </Modal>
+        <Modal title={actionType === 'confirm' ? '確認預約 & 複製訊息' : actionType === 'verify' ? '確認收款 & 複製訊息' : '取消預約 & 複製訊息'} isOpen={!!actionBooking} onClose={() => { setActionBooking(null); setActionType(null); }}><div className="space-y-4"><p className="text-sm text-gray-500">將執行狀態更新，並複製以下訊息供您傳送給客人：</p><textarea className="w-full h-40 p-3 bg-gray-50 border rounded-xl text-sm" value={actionMessage} onChange={(e) => setActionMessage(e.target.value)} /><Button onClick={executeAction} className="w-full">確認執行 & 複製訊息</Button></div></Modal>
+        <Modal title="批量匯入預約" isOpen={isBatchOpen} onClose={() => setIsBatchOpen(false)}><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded text-xs text-yellow-800">格式: <strong>YYYY-MM-DD, HH:MM, 姓名, 電話, 服務名稱</strong><br/>範例: 2024-05-20, 13:00, 王大明, 0912345678, 頂級霧眉</div><textarea className="w-full h-40 p-3 bg-gray-50 border rounded-xl text-sm whitespace-pre" placeholder="請貼上 CSV 格式內容..." value={batchText} onChange={(e) => setBatchText(e.target.value)} /><Button onClick={handleBatchImport} className="w-full">開始匯入</Button></div></Modal>
+        <Modal title="快速新增預約" isOpen={isManualAddOpen} onClose={() => setIsManualAddOpen(false)}><div className="space-y-4"><div><label className="text-xs font-bold text-gray-500 block mb-1">店點</label><div className="flex gap-2">{LOCATIONS.map(l => (<button key={l.id} onClick={() => setManualBooking({...manualBooking, locationId: l.id})} className={`flex-1 py-2 text-sm rounded border ${manualBooking.locationId === l.id ? 'bg-[#8d6e63] text-white border-[#8d6e63]' : 'bg-white border-gray-200'}`}>{l.name}</button>))}</div></div><div className="flex gap-2"><div className="flex-1"><label className="text-xs font-bold text-gray-500 block mb-1">日期</label><input type="date" className="w-full p-2 border rounded" value={manualBooking.date} onChange={e => setManualBooking({...manualBooking, date: e.target.value})} /></div><div className="flex-1"><label className="text-xs font-bold text-gray-500 block mb-1">時間</label><input type="time" className="w-full p-2 border rounded" value={manualBooking.time} onChange={e => setManualBooking({...manualBooking, time: e.target.value})} /></div></div><div><label className="text-xs font-bold text-gray-500 block mb-1">顧客姓名</label><input className="w-full p-2 border rounded" value={manualBooking.name} onChange={e => setManualBooking({...manualBooking, name: e.target.value})} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">顧客電話</label><input className="w-full p-2 border rounded" value={manualBooking.phone} onChange={e => setManualBooking({...manualBooking, phone: e.target.value})} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">服務項目</label><select className="w-full p-2 border rounded bg-white" value={manualBooking.serviceId} onChange={e => setManualBooking({...manualBooking, serviceId: e.target.value})}><option value="">請選擇...</option>{services.sort((a,b)=>(a.order||0)-(b.order||0)).map(s => (<option key={s.id} value={s.id}>{s.name} (${s.price})</option>))}</select></div><Button onClick={handleManualAdd} className="w-full mt-2">新增預約</Button></div></Modal>
     </div>
   );
-}
+};
 
 // --- Sub-components for Logic Separation ---
 
@@ -873,7 +531,7 @@ const ServiceSelection = ({ services, onSelect, onCancel }: { services: Service[
   if (stage === 'session') return (
     <div className="space-y-3 fade-in">
         <BackBtn />
-        <h3 className="font-bold text-xl text-[#4e342e] px-1">{mainCat} - {session}</h3>
+        <h3 className="font-bold text-xl text-[#4e342e] px-1">{mainCat} - 補色</h3>
         <p className="text-sm text-[#8d6e63] px-1 mb-2">是第幾次補色呢？</p>
         {TOUCHUP_SESSIONS.map(s => (
             <button key={s} onClick={() => { setSession(s); setStage('time'); }} className="w-full p-4 rounded-2xl mb-3 flex justify-between items-center bg-white border border-[#e7e0da] shadow-sm text-[#5d4037] font-medium">
@@ -918,7 +576,6 @@ const StatusPage = ({ onBack }: { onBack: () => void }) => {
         setLoading(true);
         try {
             const data = await firebaseService.searchBookings(phone);
-            // Filter out cancelled and past bookings
             const now = new Date();
             const valid = data.filter(b => b.status !== 'cancelled' && new Date(b.date) >= new Date(now.setHours(0,0,0,0)));
             valid.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -1032,11 +689,6 @@ export default function App() {
 
   // New State for Touchup Search
   const [touchupQuery, setTouchupQuery] = useState('');
-
-  // LIFF Initialization
-  useEffect(() => {
-    liff.init({ liffId: LIFF_ID }).catch(console.error);
-  }, []);
 
   useEffect(() => {
     firebaseService.signIn().catch(console.error);
@@ -1247,26 +899,6 @@ export default function App() {
 
     try {
         await firebaseService.createBookings(bookingPayloads);
-
-        // --- LINE LIFF SEND MESSAGE ---
-        if (liff.isInClient()) {
-            const messageText = `【預約申請】\n` +
-                `姓名：${guests[0].name}\n` +
-                `電話：${guests[0].phone}\n` +
-                `日期：${dStr}\n` +
-                `地點：${location?.name}\n` +
-                `項目：${guests.map(g => g.services.map(s => s.name).join('+')).join(', ')}\n` +
-                `總額：$${totalPrice}\n` +
-                `訂金：$${totalDeposit}\n\n` +
-                `請匯款至：${BANK_INFO.code} ${BANK_INFO.account}`;
-
-            await liff.sendMessages([{
-                type: 'text',
-                text: messageText
-            }]);
-        }
-        // -----------------------------
-
         setStep(4);
     } catch (e) {
         console.error(e);
