@@ -1,3 +1,4 @@
+import { TouchupChecker } from './components/TouchupChecker';
 import React, { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { Icon, Card, Button, Modal, Spinner } from './components/Shared';
@@ -843,7 +844,7 @@ export default function App() {
   const [currentGuestIndex, setCurrentGuestIndex] = useState(0);
 
   // New State for Touchup Search
-  const [touchupQuery, setTouchupQuery] = useState('');
+
 
   // LIFF Initialization
   useEffect(() => {
@@ -1092,16 +1093,14 @@ export default function App() {
     }
   };
 
-  const handleTouchupSearch = () => {
-      if(!touchupQuery) return alert('請輸入姓名或手機');
-      alert('🔍 查詢功能開發中：請稍後再來');
+ 
   };
 
   if (page === 'admin-login') return <AdminLogin onLogin={() => setPage('admin')} onBack={() => setPage('home')} />;
   if (page === 'admin') return <AdminPanel onBack={() => setPage('home')} />;
   if (page === 'status') return <StatusPage onBack={() => setPage('home')} />;
   
-  if (page === 'home') return (
+   if (page === 'home') return (
     <div className="min-h-screen flex flex-col justify-center items-center p-6 bg-[#faf9f6] relative">
        <div className="absolute top-6 left-6 opacity-30 hover:opacity-100 transition-opacity">
            <button onClick={() => setPage('admin-login')} className="p-2"><Icon name="settings" /></button>
@@ -1111,6 +1110,8 @@ export default function App() {
                 <h1 className="text-3xl font-bold text-[#5d4037] tracking-widest mb-1">AM Studio</h1>
                 <p className="text-xs text-[#8d6e63] tracking-[0.2em]">PROFESSIONAL BEAUTY</p>
             </div>
+            
+            {/* 地點選擇按鈕區塊 (保持不變) */}
             <div className="space-y-4">
                 {LOCATIONS.map(l => (
                     <button key={l.id} onClick={() => { setLocation(l); setPage('booking'); setStep(1); }} className="w-full p-6 bg-white rounded-3xl border border-[#e7e0da] shadow-sm flex flex-col items-center justify-center gap-3 transition-all duration-200 group active:scale-95 hover:shadow-md hover:border-[#d7ccc8]">
@@ -1123,6 +1124,18 @@ export default function App() {
                 ))}
             </div>
 
+            {/* 功能按鈕區塊 */}
+            <div className="pt-4">
+                <Button variant="outline" className="w-full rounded-3xl" onClick={() => setPage('status')}>
+                    <Icon name="search" size={16} /> 查詢預約 / 回報匯款
+                </Button>
+                
+                {/* 這裡是新加入的補色查詢組件 */}
+                <TouchupChecker services={services} />
+            </div>
+       </div>
+    </div>
+  );
             {/* SWAPPED POSITIONS AS REQUESTED */}
             <div className="pt-4">
                 <Button variant="outline" className="w-full rounded-3xl" onClick={() => setPage('status')}>
